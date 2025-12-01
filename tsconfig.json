@@ -1,0 +1,44 @@
+{
+  "compilerOptions": {
+    // === File Layout ===
+    "rootDir": "./src",
+    "outDir": "./dist",
+
+    // === Environment & Language ===
+    "target": "es2024",                // ES2024 is fine, but ES2022 gives wider runtime safety
+    "module": "nodenext",              // Use NodeNext for .mts/.cts and ESM compatibility
+    "moduleResolution": "nodenext",
+    "types": ["node"],
+    "lib": ["ES2024"],            // Include latest built-in types
+    
+
+    // === Type Checking ===
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    // "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+
+    //====== @ export ====
+    // "baseUrl": "./src",
+    // "paths": {
+    //   "@/*": ["*"]
+    // },
+
+    // === Emit Options ===
+    // "sourceMap": true,
+    // "declaration": true,
+    // "declarationMap": true,
+
+    // === Code Hygiene ===
+    // "noUnusedLocals": true,
+    // "noUnusedParameters": true,       // set true later once code stabilize
+
+    // === Performance ===
+    "incremental": true,               // speeds up recompilation
+    "isolatedModules": true,
+  },
+  "include": ["./src"],
+  "exclude": ["node_modules"]
+}
