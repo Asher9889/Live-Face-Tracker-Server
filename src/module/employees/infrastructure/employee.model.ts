@@ -10,10 +10,6 @@ const employeeSchema = new mongoose.Schema({
         required: true,
         unique: true
     },
-    faceImages: {
-        type: [String],
-        default: null
-    },
     department: {
         type: String,
         enum: ["Engineering", "HR", "Marketing", "Sales", "Admin", "Operations"],
@@ -23,8 +19,20 @@ const employeeSchema = new mongoose.Schema({
         type: String,
         enum: ["Admin", "Manager", "Employee", "Intern"],
         default: null,
-    }
-}, {versionKey: false});
+    },
+    faceImages: {
+        type: [String],
+        default: null
+    },
+    embeddings: {
+        type: Array,
+        default: null
+    },
+    meanEmbedding: {
+        type: Array,
+        default: null
+    },
+}, { versionKey: false });
 
 const EmployeeModel = mongoose.model("Employee", employeeSchema);
 

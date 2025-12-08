@@ -6,4 +6,6 @@ export interface CreateEmployeeDTO {
   department: TDepartment;
   role: TRole;
   faceImages: string[];   // MinIO keys
+  meanEmbedding: number[];
+  embeddings: number[][];
 }

@@ -40,6 +40,9 @@ const envConfig: IEnv = {
     minioSecretKey: process.env.MINIO_SECRET_KEY!!,
     minioEmployeeBucketName: process.env.MINIO_EMPLOYEE_BUCKET_NAME!!,
 
+    // embedding
+    embeddingApiUrl: process.env.EMBEDDING_API_URL!!,
+
 };
 
 export default envConfig;

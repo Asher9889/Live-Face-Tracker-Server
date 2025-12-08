@@ -1,9 +1,10 @@
-import { PutObjectCommand } from "@aws-sdk/client-s3";
-import minioClient from "./minio.client";
+import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
-export class MinioService {
-  static async upload(bucket: string, key: string, file: Express.Multer.File) {
-    await minioClient.send(
+export default class MinioService {
+  constructor(protected client: S3Client) {}
+
+  async upload(bucket: string, key: string, file: Express.Multer.File) {
+    await this.client.send(
       new PutObjectCommand({
         Bucket: bucket,
         Key: key,
@@ -15,7 +16,7 @@ export class MinioService {
     return key;
   }
 
-  static generateKey(prefix: string, originalName: string) {
+  generateKey(prefix: string, originalName: string) {
     return `${prefix}/${Date.now()}_${originalName}`;
   }
 }

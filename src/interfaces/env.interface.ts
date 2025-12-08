@@ -25,6 +25,9 @@ interface IEnv {
     minioAccessKey: string;
     minioSecretKey: string;
     minioEmployeeBucketName: string;
+
+    //
+    embeddingApiUrl: string;
 }
 
 

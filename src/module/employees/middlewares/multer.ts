@@ -21,7 +21,6 @@ const uploadFaces = multer({
 
 
 export function multerErrorHandler(err: any, req: Request, res: Response, next: NextFunction) {
-  console.log("Call inside multerErrorHandler")
   if (err instanceof multer.MulterError) {
 
     // Field mismatch – common error
