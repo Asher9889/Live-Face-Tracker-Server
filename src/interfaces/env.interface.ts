@@ -16,6 +16,15 @@ interface IEnv {
     gmailWebMailPass: string
     clientEmail: string;
     enquiryN8NWebhookUrl: string;
+
+    employeeImageMaxCount: number;
+    employeeImageMaxSize: number;
+
+    // minio
+    minioEndpoint: string;
+    minioAccessKey: string;
+    minioSecretKey: string;
+    minioEmployeeBucketName: string;
 }
 
 

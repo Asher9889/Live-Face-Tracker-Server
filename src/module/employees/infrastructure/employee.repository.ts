@@ -38,9 +38,9 @@ export class EmployeeRepository implements IEmployeeRepository {
     return new Employee({
       name: doc.name,
       email: doc.email,
-      image: doc.image,
       department: doc.department,
       role: doc.role,
+      faceImages: doc.faceImages,
     });
   }
 }

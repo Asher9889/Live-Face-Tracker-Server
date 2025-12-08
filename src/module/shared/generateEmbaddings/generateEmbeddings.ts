@@ -1,0 +1,5 @@
+class GenerateEmbeddings {
+    static generateEmbeddings() {
+        
+    }
+}

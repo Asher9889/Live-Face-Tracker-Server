@@ -28,7 +28,17 @@ const envConfig: IEnv = {
     clientEmail: process.env.CLIENT_EMAIL || "",
 
     //
-    enquiryN8NWebhookUrl: process.env.N8N_ENQUIRY || ""
+    enquiryN8NWebhookUrl: process.env.N8N_ENQUIRY || "",
+
+    // Multer Employee
+    employeeImageMaxCount: Number(process.env.EMPLOYEE_IMAGE_MAX_COUNT),
+    employeeImageMaxSize: Number(process.env.EMPLOYEE_IMAGE_MAX_SIZE),
+
+    //minio
+    minioEndpoint: process.env.MINIO_ENDPOINT!!,
+    minioAccessKey: process.env.MINIO_ACCESS_KEY!!,
+    minioSecretKey: process.env.MINIO_SECRET_KEY!!,
+    minioEmployeeBucketName: process.env.MINIO_EMPLOYEE_BUCKET_NAME!!,
 
 };
 

@@ -3,20 +3,20 @@ import { TDepartment, TRole } from "./employee.constants";
 export class Employee {
   name: string;
   email: string;
-  image: string;
   department: TDepartment;
   role: TRole;
+  faceImages: string[];
 
   constructor(props: {
     name: string;
     email: string;
-    image: string;
+    faceImages: string[];
     department: TDepartment;
     role: TRole;
   }) {
     this.name = props.name;
     this.email = props.email;
-    this.image = props.image;
+    this.faceImages = props.faceImages;
     this.department = props.department;
     this.role = props.role;
 

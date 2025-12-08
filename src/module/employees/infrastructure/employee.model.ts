@@ -10,8 +10,8 @@ const employeeSchema = new mongoose.Schema({
         required: true,
         unique: true
     },
-    image: {
-        type: String,
+    faceImages: {
+        type: [String],
         default: null
     },
     department: {

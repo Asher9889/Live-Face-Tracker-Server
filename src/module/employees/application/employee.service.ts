@@ -9,7 +9,7 @@ export class EmployeeService {
 
   async createEmployee(data: CreateEmployeeDTO) {
     const exists = await this.repo.findByEmail(data.email);
-    console.log("exists is:", exists)
+    
     if (exists) throw new ApiError(StatusCodes.BAD_REQUEST, "Employee with email already exists", [{field: "email", message: "Employee with email already exists"}]);
 
     const employee = new Employee(data);
