@@ -26,6 +26,7 @@ const CameraSchema = new Schema<Camera & Document>(
         password: { type: String },
       },
       required: false,
+      _id: false,
     },
 
     streamConfig: {
@@ -33,6 +34,7 @@ const CameraSchema = new Schema<Camera & Document>(
         aiFps: { type: Number, default: 25 },
         displayFps: { type: Number, default: 25 },
       },
+      _id: false,
     },
 
     roi: {
@@ -43,6 +45,7 @@ const CameraSchema = new Schema<Camera & Document>(
           default: [],
         },
       },
+      _id: false,
     },
 
     status: {
@@ -51,6 +54,7 @@ const CameraSchema = new Schema<Camera & Document>(
         lastCheckedAt: { type: Date },
         lastFrameAt: { type: Date },
       },
+      _id: false,
       default: {},
     },
 

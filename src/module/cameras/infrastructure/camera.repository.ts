@@ -4,7 +4,11 @@ import ICameraRepository from "./ICamera.repository";
 
 export default class CameraRepository implements ICameraRepository {
     async save(camera: Camera): Promise<Camera> {
-        const doc = await CameraModel.create(camera);
+        const doc = await CameraModel.create(camera.toJSON());
+        return doc;
+    }
+    async findByCode(code: string): Promise<Camera | null> {
+        const doc = await CameraModel.findOne({ code }, { _id: 1 }).lean();
         return doc;
     }
 }

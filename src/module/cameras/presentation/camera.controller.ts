@@ -9,6 +9,7 @@ export default class CameraController {
 
     constructor(cameraService:CameraService) {
         this.cameraService = cameraService;
+        this.createCamera = this.createCamera.bind(this);
     }
     
     async createCamera(req: Request, res: Response, next: NextFunction){
