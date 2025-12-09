@@ -9,3 +9,9 @@ export interface CreateEmployeeDTO {
   meanEmbedding: number[];
   embeddings: number[][];
 }
+
+export interface EmployeeEmbeddingDTO {
+  name: string;
+  embeddings: number[][];
+  meanEmbedding: number[];
+}

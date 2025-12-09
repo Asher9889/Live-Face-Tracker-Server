@@ -9,6 +9,8 @@ const controller = new EmployeeController();
 
 router.post("/", uploadFaces, multerErrorHandler, validate(createEmployeeSchema), controller.createEmployee);
 
+router.get("/embeddings", controller.findAllEmbeddings);
+
 router.get("/", (req, res) => {
     res.send("Hello World!");
 })

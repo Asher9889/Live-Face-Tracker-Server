@@ -55,4 +55,8 @@ export class EmployeeService {
 
     return this.repo.save(employee);
   }
+
+  async findAllEmbeddings() {
+    return this.repo.findAllEmbeddings();
+  }
 }
