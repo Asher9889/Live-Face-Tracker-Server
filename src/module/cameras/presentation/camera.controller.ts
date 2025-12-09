@@ -10,6 +10,7 @@ export default class CameraController {
     constructor(cameraService:CameraService) {
         this.cameraService = cameraService;
         this.createCamera = this.createCamera.bind(this);
+        this.getAllCameras = this.getAllCameras.bind(this);
     }
     
     async createCamera(req: Request, res: Response, next: NextFunction){
@@ -29,6 +30,16 @@ export default class CameraController {
             };
             const camera = await this.cameraService.createCamera(dto);
             return ApiResponse.success(res, "Camera created successfully", camera, StatusCodes.CREATED)
+        } catch (error) {
+            console.log("error is:", error)
+            return next(error);
+        }
+    }
+
+    async getAllCameras(req: Request, res: Response, next: NextFunction){
+        try {
+            const cameras = await this.cameraService.getAllCameras();
+            return ApiResponse.success(res, "Cameras fetched successfully", cameras, StatusCodes.OK)
         } catch (error) {
             console.log("error is:", error)
             return next(error);

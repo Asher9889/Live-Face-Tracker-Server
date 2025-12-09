@@ -18,5 +18,7 @@ export default class CameraService {
         const camera = new Camera(cameraDTO);
         return this.repo.save(camera);
     }
-    
+    async getAllCameras(){
+        return await this.repo.getAll();
+    }
 }

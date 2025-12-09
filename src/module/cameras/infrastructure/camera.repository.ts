@@ -11,4 +11,8 @@ export default class CameraRepository implements ICameraRepository {
         const doc = await CameraModel.findOne({ code }, { _id: 1 }).lean();
         return doc;
     }
+    async getAll(){
+        const docs = await CameraModel.find().lean();
+        return docs;
+    }
 }
