@@ -49,10 +49,7 @@ export class EmployeeService {
     dto.faceImages = uploadedKeys;
 
     const employee = new Employee(dto);
-    console.log("Created employee", employee)
-    
-    const saved = this.repo.save(employee);
-    console.log("Saved employee", employee)
+    const saved = await this.repo.save(employee);
     EventBus.emit(EventNames.EMPLOYEE_CREATED, saved);
 
     return saved;

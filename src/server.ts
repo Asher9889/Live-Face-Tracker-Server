@@ -5,6 +5,7 @@ import { globalErrorHandler, routeNotExistsHandler } from "./utils";
 import apiRouter from "./routes";
 import http from "http";
 import initStreaming from "./stream/initStream";
+import { initEventHandlers } from "./events/Event";
 
 const app = express();
 const server = http.createServer(app);
@@ -12,6 +13,7 @@ const server = http.createServer(app);
 
 connectMongoDB();
 connectRedis();
+initEventHandlers();
 
 
 app.use(express.json());

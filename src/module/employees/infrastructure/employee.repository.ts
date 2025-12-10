@@ -15,13 +15,13 @@ export class EmployeeRepository implements IEmployeeRepository {
   }
 
   async findAllEmbeddings() {
-    const docs = await EmployeeModel.find({},{ name:1, meanEmbedding:1, embeddings: 1, }).lean()
+    const docs = await EmployeeModel.find({},{ name:1, meanEmbedding:1, embeddings: 1, id: 1, _id: 0 }).lean()
     return docs;
   }
  
   private map(doc: any):Employee {
     return new Employee({
-      id: doc._id,
+      id: doc.id,
       name: doc.name,
       email: doc.email,
       department: doc.department,

@@ -7,10 +7,11 @@ export default class EmbeddingPublisher {
     constructor(private redis: Redis){}
 
     initialize(){
-        EventBus.on(EventNames.EMPLOYEE_CREATED, this.handleEmployeeCreated)
+        EventBus.on(EventNames.EMPLOYEE_CREATED, this.handleEmployeeCreated.bind(this));
     }
 
     private async handleEmployeeCreated(employee: Employee){
+        console.log("employee is====", employee);
         const payload = {
             id: employee.id,
             name: employee.name,
@@ -18,6 +19,6 @@ export default class EmbeddingPublisher {
             meanEmbedding: employee.meanEmbedding
         }
         await this.redis.publish(EventNames.EMPLOYEE_CREATED, JSON.stringify(payload));
-        console.log("[EmbeddingPublisher] Published embedding update:", employee.id);
+        console.log("[EmbeddingPublisher] Published embedding update:", payload);
     }
 }   
