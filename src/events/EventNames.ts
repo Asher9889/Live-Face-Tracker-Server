@@ -6,5 +6,9 @@ const EventNames = {
   EMBEDDING_UPDATED: "embedding.updated",
 } as const;
 
+export const RedisEventNames = {
+    EMPLOYEE_CREATED: "live-face-tracker:employee:created"
+}
+
 
 export default EventNames;
