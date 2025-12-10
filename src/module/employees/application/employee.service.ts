@@ -3,14 +3,11 @@ import { ApiError } from "../../../utils";
 import { Employee } from "../domain/employee.entity";
 import { IEmployeeRepository } from "../infrastructure/IEmployeeRepository";
 import { CreateEmployeeDTO } from "./dtos/CreateEmployeeDTO";
-
-// Services
 import EmployeeEmbeddingService from "../infrastructure/employee.embedding.service";
 import MinioService from "../../shared/minio/minio.service";
 import { EmployeeMinioService } from "../infrastructure/employess.minio.service";
-
-// Config
 import { envConfig } from "../../../config";
+import { EventBus, EventNames } from "../../../events";
 
 export class EmployeeService {
   private embeddingService: EmployeeEmbeddingService;
@@ -52,8 +49,13 @@ export class EmployeeService {
     dto.faceImages = uploadedKeys;
 
     const employee = new Employee(dto);
+    console.log("Created employee", employee)
+    
+    const saved = this.repo.save(employee);
+    console.log("Saved employee", employee)
+    EventBus.emit(EventNames.EMPLOYEE_CREATED, saved);
 
-    return this.repo.save(employee);
+    return saved;
   }
 
   async findAllEmbeddings() {

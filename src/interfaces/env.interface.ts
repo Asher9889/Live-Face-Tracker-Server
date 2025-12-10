@@ -28,6 +28,12 @@ interface IEnv {
 
     //
     embeddingApiUrl: string;
+
+    // redis
+    redisHost: string;
+    redisPort: number;
+    redisPassword: string;
+    redisDb: number;
 }
 
 

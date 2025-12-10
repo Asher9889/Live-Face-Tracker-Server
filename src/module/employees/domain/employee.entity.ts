@@ -1,6 +1,7 @@
 import { TDepartment, TRole } from "./employee.constants";
 
 export class Employee {
+  id: string;
   name: string;
   email: string;
   department: TDepartment;
@@ -10,6 +11,7 @@ export class Employee {
   meanEmbedding: number[];
 
   constructor(props: {
+    id?:string
     name: string;
     email: string;
     faceImages: string[];
@@ -18,6 +20,7 @@ export class Employee {
     embeddings: number[][];
     meanEmbedding: number[];
   }) {
+    this.id = props.id || "";
     this.name = props.name;
     this.email = props.email;
     this.faceImages = props.faceImages;

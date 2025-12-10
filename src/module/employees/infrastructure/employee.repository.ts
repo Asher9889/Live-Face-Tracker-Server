@@ -21,6 +21,7 @@ export class EmployeeRepository implements IEmployeeRepository {
  
   private map(doc: any):Employee {
     return new Employee({
+      id: doc._id,
       name: doc.name,
       email: doc.email,
       department: doc.department,

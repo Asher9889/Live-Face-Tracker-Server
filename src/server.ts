@@ -1,5 +1,5 @@
 import express from "express";
-import { connectMongoDB } from "./db";
+import { connectMongoDB, connectRedis } from "./db";
 import { envConfig } from "./config";
 import { globalErrorHandler, routeNotExistsHandler } from "./utils";
 import apiRouter from "./routes";
@@ -11,6 +11,7 @@ const server = http.createServer(app);
 
 
 connectMongoDB();
+connectRedis();
 
 
 app.use(express.json());

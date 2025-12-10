@@ -43,6 +43,13 @@ const envConfig: IEnv = {
     // embedding
     embeddingApiUrl: process.env.EMBEDDING_API_URL!!,
 
+    // Redis
+    redisHost: process.env.REDIS_HOST!!,
+    redisPort: Number(process.env.REDIS_PORT)!!,
+    redisPassword: process.env.REDIS_PASSWORD!!,
+    redisDb: Number(process.env.REDIS_DB)!!,
+    
+
 };
 
 export default envConfig;
