@@ -1,4 +1,5 @@
 import express from "express";
+import cors from "cors";
 import { connectMongoDB, connectRedis } from "./db";
 import { envConfig } from "./config";
 import { globalErrorHandler, routeNotExistsHandler } from "./utils";
@@ -18,6 +19,7 @@ initEventHandlers();
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cors());
 
 initStreaming(server);
 app.use("/api", apiRouter)
