@@ -1,7 +1,7 @@
 import EmployeeModel from "./employee.model";
 import { Employee } from "../domain/employee.entity";
 import { IEmployeeRepository } from "./IEmployeeRepository";
-import { EmployeeEmbeddingDTO } from "../application/dtos/CreateEmployeeDTO";
+import { EmployeeEmbeddingDTO, EmployeeListDTO } from "../application/dtos/CreateEmployeeDTO";
 
 export class EmployeeRepository implements IEmployeeRepository {
   async save(employee: Employee): Promise<Employee> {
@@ -19,9 +19,20 @@ export class EmployeeRepository implements IEmployeeRepository {
     return docs;
   }
  
+  async findAll(): Promise<EmployeeListDTO[]> {
+    const docs = await EmployeeModel.find({}, { _id: 0 }).lean();
+    return docs.map(doc => ({
+      id: doc.id!,
+      name: doc.name,
+      email: doc.email,
+      department: doc.department,
+      role: doc.role
+    }));
+  }
+ 
   private map(doc: any):Employee {
     return new Employee({
-      id: doc.id,
+      id: doc.id!,
       name: doc.name,
       email: doc.email,
       department: doc.department,

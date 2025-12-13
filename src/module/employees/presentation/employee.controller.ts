@@ -11,6 +11,7 @@ export default class EmployeeController {
     constructor() {
         this.employeeService = employeeService;
         this.createEmployee = this.createEmployee.bind(this);
+        this.findAllEmployees = this.findAllEmployees.bind(this);
         this.findAllEmbeddings = this.findAllEmbeddings.bind(this);
     }
     
@@ -30,6 +31,16 @@ export default class EmployeeController {
             return ApiResponse.success(res, "Employee created successfully", employee, StatusCodes.CREATED )
         } catch (error) {
             console.log("error is:", error)
+            return next(error);
+        }
+    }
+
+    async findAllEmployees(req: Request, res: Response, next: NextFunction) {
+        try {
+            const employees = await this.employeeService.findAllEmployees();
+            return ApiResponse.success(res, "Employees fetched successfully", employees, StatusCodes.OK);
+        } catch (error) {
+            console.log("error is:", error);
             return next(error);
         }
     }

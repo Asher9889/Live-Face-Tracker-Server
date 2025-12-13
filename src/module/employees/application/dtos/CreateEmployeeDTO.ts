@@ -15,3 +15,12 @@ export interface EmployeeEmbeddingDTO {
   embeddings: number[][];
   meanEmbedding: number[];
 }
+
+
+export interface EmployeeListDTO {
+  id: string;
+  name: string;
+  email: string;
+  department: TDepartment;
+  role: TRole;
+}
