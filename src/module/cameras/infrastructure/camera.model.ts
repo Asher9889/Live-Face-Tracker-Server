@@ -67,6 +67,12 @@ const CameraSchema = new Schema<Camera & Document>(
   }
 );
 
+CameraSchema.pre("save", function () {
+    if (!this.id) {
+        this.id = this._id.toString();
+    }
+});
+
 // ---------------- Indexes ----------------
 
 CameraSchema.index({ code: 1 }, { unique: true });

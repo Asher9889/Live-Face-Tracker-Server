@@ -5,28 +5,27 @@ import { envConfig } from "./config";
 import { globalErrorHandler, routeNotExistsHandler } from "./utils";
 import apiRouter from "./routes";
 import http from "http";
-import initStreaming from "./stream/initStream";
-import { initEventHandlers } from "./events/Event";
+// import initStreaming from "./stream/initStream";
 
 const app = express();
-const server = http.createServer(app);
+// const server = http.createServer(app);
 
 
 connectMongoDB();
 connectRedis();
-initEventHandlers();
+// initEventHandlers();
 
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cors());
 
-initStreaming(server);
+// initStreaming(server);
 app.use("/api", apiRouter)
 
 app.use(routeNotExistsHandler);
 app.use(globalErrorHandler);
 
-server.listen(envConfig.port, () => {
+app.listen(envConfig.port, () => {
     console.log(`Server is running on port ${envConfig.port}`);
 });

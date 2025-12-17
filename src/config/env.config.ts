@@ -48,6 +48,11 @@ const envConfig: IEnv = {
     redisPort: Number(process.env.REDIS_PORT)!!,
     redisPassword: process.env.REDIS_PASSWORD!!,
     redisDb: Number(process.env.REDIS_DB)!!,
+
+    // LiveKit
+    liveKitIngressHost: process.env.LIVEKIT_INGRESS_HOST!!,
+    liveKitApiSecret: process.env.LIVEKIT_API_SECRET!!,
+    liveKitApiKey: process.env.LIVEKIT_API_KEY!!,
     
 
 };

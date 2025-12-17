@@ -41,7 +41,6 @@ export default class Camera {
   constructor(props: ICameraProps) {
     this.props = {
       ...props,
-
       credentials: props.credentials ?? { username: null, password: null },
 
       streamConfig: props.streamConfig ?? {
@@ -62,8 +61,7 @@ export default class Camera {
         online: props.status?.online ?? false,
         lastCheckedAt: props.status?.lastCheckedAt ?? null,
         lastFrameAt: props.status?.lastFrameAt ?? null,
-      },
-    };
+      }, };
   }
 
   // ----------------- Getters ------------------

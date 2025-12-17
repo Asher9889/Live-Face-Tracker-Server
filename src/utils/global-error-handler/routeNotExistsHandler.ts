@@ -1,8 +1,9 @@
 import { NextFunction, Request, Response } from "express"
-import { ApiResponse } from "../index"
+import { ApiError, ApiResponse } from "../index"
+import { StatusCodes } from "http-status-codes";
 
 function routeNotExistsHandler(req:Request, res:Response, next:NextFunction) {
-    return next(ApiResponse.error(res, "Please check your api endpoints", 404))
+    return next(new ApiError(StatusCodes.NOT_FOUND, "Please check your api endpoints"))
 }
 
 export default routeNotExistsHandler;

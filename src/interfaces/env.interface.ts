@@ -34,6 +34,11 @@ interface IEnv {
     redisPort: number;
     redisPassword: string;
     redisDb: number;
+
+    // LiveKit
+    liveKitIngressHost: string;
+    liveKitApiSecret: string;
+    liveKitApiKey: string;
 }
 
 
