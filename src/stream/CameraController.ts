@@ -118,6 +118,14 @@ export class CameraController {
           stoppedAt: Date.now(),
         });
       }
+      await redis.publish(
+        RedisEventNames.CAMERA_STATE_CHANGED,
+        JSON.stringify({
+          cameraId,
+          status: "offline",
+          lastFrameAt: proc.lastFrameAt,
+        })
+      );
       this.processes.delete(cameraId);
     });
 

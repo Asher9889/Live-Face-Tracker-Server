@@ -5,27 +5,26 @@ import { envConfig } from "./config";
 import { globalErrorHandler, routeNotExistsHandler } from "./utils";
 import apiRouter from "./routes";
 import http from "http";
-// import initStreaming from "./stream/initStream";
-
-const app = express();
-// const server = http.createServer(app);
-
+import { initWSSStreaming, initCameraStatusSubscriber } from "./stream";
 
 connectMongoDB();
 connectRedis();
-// initEventHandlers();
 
+const app = express();
+const server = http.createServer(app);
+
+initWSSStreaming(server);
+initCameraStatusSubscriber();
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cors());
 
-// initStreaming(server);
 app.use("/api", apiRouter)
 
 app.use(routeNotExistsHandler);
 app.use(globalErrorHandler);
 
-app.listen(envConfig.port, () => {
+server.listen(envConfig.port, () => {
     console.log(`Server is running on port ${envConfig.port}`);
 });

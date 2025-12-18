@@ -1,31 +1,48 @@
-import WebSocket from "ws";
-import { StreamManager } from "./StreamManager";
+import { WebSocketServer, WebSocket } from "ws";
+import http from "http";
 
 export class WSStreamServer {
-  private wss: WebSocket.Server;
+  private wss: WebSocketServer;
+  private clients = new Set<WebSocket>();
 
-  constructor(server: any, streamManager: StreamManager) {
-    this.wss = new WebSocket.Server({ server });
+  constructor(server: http.Server) {
+    this.wss = new WebSocketServer({ server });
 
     this.wss.on("connection", (ws, req) => {
-      const url = new URL(req.url!, `http://${req.headers.host}`);
-      const cameraId = url.searchParams.get("cameraId");
+    // ws another ws object represent the unique/different client
+      this.clients.add(ws);
+      console.log("Total Client connected", this.clients.size);
 
-      if (!cameraId) return ws.close();
+      ws.on("ping", () => {
+        ws.pong();
+      })
 
-      const stream = streamManager.getStream(cameraId);
-      if (!stream) return ws.close();
-
-      stream.addClient();
-
-      const videoListener = (chunk: Buffer) => ws.send(chunk);
-      stream.on("video", videoListener);
+      ws.on("error", () => {
+        this.clients.delete(ws);
+        console.log("Total Client connected", this.clients.size);
+      });
 
       ws.on("close", () => {
-        stream.removeClient();
-        stream.off("video", videoListener);
+        this.clients.delete(ws);
+        console.log("Total Client connected", this.clients.size);
       });
     });
+
+    this.wss.on("close", () => {
+      console.log("WS closed");
+      this.clients.clear();
+    });
+  }
+
+  broadcast(data: Record<string, any>) {
+    if(this.clients.size === 0) return;
+    console.log("Broadcasting to", this.clients.size, "clients");
+
+    for(let client of this.clients){
+      if(client.readyState === WebSocket.OPEN) { // 1
+        client.send(JSON.stringify(data));
+      }
+    }
   }
 }
 
