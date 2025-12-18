@@ -21,4 +21,7 @@ export default class CameraService {
     async getAllCameras(){
         return await this.repo.getAll();
     }
+    async getAllCamerasStatus(){
+        return await this.repo.getAllStatus();
+    }
 }

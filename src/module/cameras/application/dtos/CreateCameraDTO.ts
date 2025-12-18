@@ -34,3 +34,11 @@ export interface CreateCameraDTO {
     lastFrameAt: Date | null;
   };
 }
+
+
+export interface CameraStatusDTO {
+    code: string;
+    status: string;
+    lastFrameAt: number | null;
+    stoppedAt: number | null;
+}

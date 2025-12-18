@@ -45,4 +45,6 @@ router.post("/:cameraId/stop", async (req, res) => {
   return res.json({ status: "stopped", cameraId });
 });
 
+router.get("/status", controller.getAllCamerasStatus);
+
 export default router;

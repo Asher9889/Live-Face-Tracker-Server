@@ -1,3 +1,8 @@
+import { StatusCodes } from "http-status-codes";
+import { Redis } from "../../../db";
+import { RedisEventNames } from "../../../events/EventNames";
+import { ApiError } from "../../../utils";
+import { CameraStatusDTO } from "../application/dtos/CreateCameraDTO";
 import Camera from "../domain/camera.entity";
 import CameraModel from "./camera.model";
 import ICameraRepository from "./ICamera.repository";
@@ -14,5 +19,36 @@ export default class CameraRepository implements ICameraRepository {
     async getAll(){
         const docs = await CameraModel.find().lean();
         return docs;
+    }
+    async getAllStatus(): Promise<CameraStatusDTO[]> {
+        const cameras = await CameraModel.find({}, { _id: 0, code: 1, status: 1}).lean();
+
+        const pipeline = Redis.pipeline();
+        cameras.forEach(camera => {
+            pipeline.hgetall(RedisEventNames.CAMERA_STATE(camera.code));
+        });
+
+        const results = await pipeline.exec();
+
+        if(!results || results.length === 0 || results === null){
+            throw new ApiError(StatusCodes.INTERNAL_SERVER_ERROR, "Failed to get camera status");
+        }
+       
+        const cameraStatus: CameraStatusDTO[] = [];
+
+        cameras.forEach((camera , index) => {
+            const state = results[index]; 
+            if(!state) return;
+            let redisState = state[1] as Record<"status" | "lastFrameAt" | "stoppedAt" | "ingressId", string>;
+            const code = camera.code;
+            cameraStatus.push({
+                code: code,
+                status: redisState.status,
+                lastFrameAt: redisState.lastFrameAt ? Number(redisState.lastFrameAt) : null, 
+                stoppedAt: redisState.stoppedAt ? Number(redisState.stoppedAt) : null
+            })
+        })
+
+        return cameraStatus;
     }
 }

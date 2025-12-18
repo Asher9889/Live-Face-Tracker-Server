@@ -13,6 +13,7 @@ export default class CameraController {
         this.createCamera = this.createCamera.bind(this);
         this.getAllCameras = this.getAllCameras.bind(this);
         this.getToken = this.getToken.bind(this);
+        this.getAllCamerasStatus = this.getAllCamerasStatus.bind(this);
     }
 
     async createCamera(req: Request, res: Response, next: NextFunction) {
@@ -61,6 +62,11 @@ export default class CameraController {
             console.error("error getting token:", error);
             return next(error);
         }
+    }
+
+    async getAllCamerasStatus(req: Request, res: Response, next: NextFunction){
+        const cameras = await this.cameraService.getAllCamerasStatus();
+        return ApiResponse.success(res, "Cameras fetched successfully", cameras, StatusCodes.OK)
     }
 
 }
