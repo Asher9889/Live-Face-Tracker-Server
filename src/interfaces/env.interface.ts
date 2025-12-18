@@ -39,6 +39,10 @@ interface IEnv {
     liveKitIngressHost: string;
     liveKitApiSecret: string;
     liveKitApiKey: string;
+
+    // Camera Status track
+    watchdogInterval: number;
+    offlineThreshold: number;
 }
 
 

@@ -58,7 +58,7 @@ export default class CameraController {
 
             return ApiResponse.success(res, "Token generated successfully", { token }, StatusCodes.OK);
         } catch (error) {
-            console.log("error getting token:", error);
+            console.error("error getting token:", error);
             return next(error);
         }
     }

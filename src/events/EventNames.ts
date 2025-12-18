@@ -7,7 +7,8 @@ const EventNames = {
 } as const;
 
 export const RedisEventNames = {
-    EMPLOYEE_CREATED: "live-face-tracker:employee:created"
+    EMPLOYEE_CREATED: "live-face-tracker:employee:created",
+    CAMERA_STATE: (cameraId: string) =>  `live-face-tracker:camera-event:${cameraId}:status`
 }
 
 

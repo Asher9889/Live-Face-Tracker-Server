@@ -53,6 +53,10 @@ const envConfig: IEnv = {
     liveKitIngressHost: process.env.LIVEKIT_INGRESS_HOST!!,
     liveKitApiSecret: process.env.LIVEKIT_API_SECRET!!,
     liveKitApiKey: process.env.LIVEKIT_API_KEY!!,
+
+    // Camera Status track
+    watchdogInterval: Number(process.env.WATCHDOG_INTERVAL!!),
+    offlineThreshold: Number(process.env.OFFLINE_THRESHOLD!!),
     
 
 };

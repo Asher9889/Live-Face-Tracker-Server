@@ -1,10 +1,17 @@
 import { spawn, ChildProcess } from "child_process";
 import { createCameraIngress } from "./ingress.service";
 import type { IngressInfo } from "livekit-server-sdk";
+import redis from "../db/connectRedis";
+import { ApiError } from "../utils";
+import { StatusCodes } from "http-status-codes";
+import { envConfig } from "../config";
+import { RedisEventNames } from "../events/EventNames";
 
 type CameraProcess = {
   ffmpeg: ChildProcess;
   ingressId: string;
+  lastFrameAt: number;
+
 };
 
 export class CameraController {
@@ -12,7 +19,7 @@ export class CameraController {
 
   async start(cameraId: string, rtspUrl: string): Promise<IngressInfo> {
     if (this.processes.has(cameraId)) {
-      throw new Error("Camera already running");
+      throw new ApiError(StatusCodes.CONFLICT, "Camera already running");
     }
 
     // 1️⃣ Create ingress (THIS creates the LiveKit participant)
@@ -39,27 +46,68 @@ export class CameraController {
       rtmpUrl,
     ]);
 
-    ffmpeg.stderr.on("data", d =>
-      console.log(`[${cameraId}]`, d.toString())
-    );
+    ffmpeg.stderr.on("data", (buffer) => {
+      const log = buffer.toString();
 
-    ffmpeg.on("exit", () => {
+      if (log.includes("frame=")) {
+        const proc = this.processes.get(cameraId);
+        if (!proc) return;
+
+        proc.lastFrameAt = Date.now();
+
+        redis.hset(RedisEventNames.CAMERA_STATE(cameraId), {
+          status: "online",
+          lastFrameAt: proc.lastFrameAt,
+          ingressId: proc.ingressId,
+        });
+      }
+    });
+
+    ffmpeg.on("exit", async () => {
+      await redis.hset(RedisEventNames.CAMERA_STATE(cameraId), {
+        status: "offline",
+        stoppedAt: Date.now(),
+      });
       this.processes.delete(cameraId);
     });
 
     this.processes.set(cameraId, {
       ffmpeg,
       ingressId: ingress.ingressId,
+      lastFrameAt: Date.now(),
     });
+
+    const watchdog = setInterval(async () => {
+      const proc = this.processes.get(cameraId);
+      if (!proc) {
+        clearInterval(watchdog);
+        return;
+      }
+
+      if (Date.now() - proc.lastFrameAt > envConfig.offlineThreshold) {
+        await redis.hset(RedisEventNames.CAMERA_STATE(cameraId), {
+          status: "offline",
+          lastFrameAt: proc.lastFrameAt,
+        });
+      }
+    }, envConfig.watchdogInterval);
 
     return ingress;
   }
 
-  stop(cameraId: string) {
+  async stop(cameraId: string) {
     const proc = this.processes.get(cameraId);
     if (!proc) return;
 
-    proc.ffmpeg.kill("SIGKILL");
-    this.processes.delete(cameraId);
+    proc.ffmpeg.kill("SIGTERM");
+    setTimeout(() => {
+      if (!proc.ffmpeg.killed) {
+        proc.ffmpeg.kill("SIGKILL");
+      }
+    }, 3000);
+    await redis.hset(RedisEventNames.CAMERA_STATE(cameraId), {
+      status: "offline",
+      stoppedAt: Date.now(),
+    });
   }
 }

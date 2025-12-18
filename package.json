@@ -20,6 +20,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.946.0",
+    "@fontsource/ibm-plex-sans": "^5.2.8",
     "@types/cors": "^2.8.19",
     "axios": "^1.13.2",
     "cors": "^2.8.5",
