@@ -11,7 +11,7 @@ type CameraProcess = {
   ffmpeg: ChildProcess;
   ingressId: string;
   lastFrameAt: number;
-
+  status: string;
 };
 
 export class CameraController {
@@ -22,7 +22,7 @@ export class CameraController {
       throw new ApiError(StatusCodes.CONFLICT, "Camera already running");
     }
 
-    // 1️⃣ Create ingress (THIS creates the LiveKit participant)
+    //Create ingress (THIS creates the LiveKit participant)
     const ingress = await createCameraIngress(cameraId);
 
     const streamKey = ingress.streamKey;
@@ -33,7 +33,7 @@ export class CameraController {
       throw new Error("RTMP ingress URL not returned");
     }
 
-    // 2️⃣ Start FFmpeg (RTSP → RTMP)
+    //Start FFmpeg (RTSP → RTMP)
     const ffmpeg = spawn("ffmpeg", [
       "-rtsp_transport", "tcp",
       "-i", rtspUrl,
@@ -46,37 +46,47 @@ export class CameraController {
       rtmpUrl,
     ]);
 
-    ffmpeg.stderr.on("data", (buffer) => {
+    // Initialize in-memory state
+    this.processes.set(cameraId, {
+      ffmpeg,
+      ingressId: ingress.ingressId,
+      lastFrameAt: 0,
+      status: "offline",
+    });
+
+    ffmpeg.stderr.on("data", async (buffer) => {
       const log = buffer.toString();
 
-      if (log.includes("frame=")) {
-        const proc = this.processes.get(cameraId);
-        if (!proc) return;
+      if (!log.includes("frame=")) {
+        return;
+      }
 
-        proc.lastFrameAt = Date.now();
+      const proc = this.processes.get(cameraId);
+      if (!proc) return;
 
-        redis.hset(RedisEventNames.CAMERA_STATE(cameraId), {
+      proc.lastFrameAt = Date.now();
+
+      if (proc.status !== "online") {
+        proc.status = "online";
+        await redis.hset(RedisEventNames.CAMERA_STATE(cameraId), {
           status: "online",
           lastFrameAt: proc.lastFrameAt,
           ingressId: proc.ingressId,
         });
+
+        await redis.publish(
+          RedisEventNames.CAMERA_STATE_CHANGED,
+          JSON.stringify({
+            cameraId,
+            status: "online",
+            lastFrameAt: proc.lastFrameAt,
+          })
+        );
       }
     });
 
-    ffmpeg.on("exit", async () => {
-      await redis.hset(RedisEventNames.CAMERA_STATE(cameraId), {
-        status: "offline",
-        stoppedAt: Date.now(),
-      });
-      this.processes.delete(cameraId);
-    });
 
-    this.processes.set(cameraId, {
-      ffmpeg,
-      ingressId: ingress.ingressId,
-      lastFrameAt: Date.now(),
-    });
-
+    // continous watching wheather camera is online or offline
     const watchdog = setInterval(async () => {
       const proc = this.processes.get(cameraId);
       if (!proc) {
@@ -85,12 +95,31 @@ export class CameraController {
       }
 
       if (Date.now() - proc.lastFrameAt > envConfig.offlineThreshold) {
-        await redis.hset(RedisEventNames.CAMERA_STATE(cameraId), {
+        return await redis.hset(RedisEventNames.CAMERA_STATE(cameraId), {
           status: "offline",
           lastFrameAt: proc.lastFrameAt,
         });
       }
+
+      await redis.hset(RedisEventNames.CAMERA_STATE(cameraId), {
+        lastFrameAt: proc.lastFrameAt,
+      })
     }, envConfig.watchdogInterval);
+
+
+    // when exit this event fire when at the end ffmpeg process is finished
+    ffmpeg.on("exit", async () => {
+      const proc = this.processes.get(cameraId);
+      if (!proc) return;
+      clearInterval(watchdog);
+      if (proc.status !== "offline") {
+        await redis.hset(RedisEventNames.CAMERA_STATE(cameraId), {
+          status: "offline",
+          stoppedAt: Date.now(),
+        });
+      }
+      this.processes.delete(cameraId);
+    });
 
     return ingress;
   }
