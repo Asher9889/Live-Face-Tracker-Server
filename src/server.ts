@@ -6,6 +6,7 @@ import { globalErrorHandler, routeNotExistsHandler } from "./utils";
 import apiRouter from "./routes";
 import http from "http";
 import { initWSSStreaming, initCameraStatusSubscriber } from "./stream";
+import initCameraBBoxSubscriber from "./stream/initCameraBBoxSubscriber";
 
 connectMongoDB();
 connectRedis();
@@ -15,6 +16,7 @@ const server = http.createServer(app);
 
 initWSSStreaming(server);
 initCameraStatusSubscriber();
+initCameraBBoxSubscriber();
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

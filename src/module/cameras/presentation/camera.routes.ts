@@ -17,10 +17,9 @@ router.post("/", validate(cameraSchema), controller.createCamera);
 router.get("/", controller.getAllCameras);
 router.get("/:cameraId/token", controller.getToken);
 router.post("/:cameraId/start", async (req, res, next) => {
-
   try {
     const cameraId = req.params.cameraId;
-    const rtspUrl = cameraUrl.entry_1;
+    const rtspUrl = cameraUrl[cameraId];
   
     if (!rtspUrl) {
       throw new ApiError(StatusCodes.NOT_FOUND, "Camera not found");

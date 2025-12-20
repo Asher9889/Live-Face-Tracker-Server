@@ -95,15 +95,27 @@ export class CameraController {
       }
 
       if (Date.now() - proc.lastFrameAt > envConfig.offlineThreshold) {
-        return await redis.hset(RedisEventNames.CAMERA_STATE(cameraId), {
+        await redis.hset(RedisEventNames.CAMERA_STATE(cameraId), {
           status: "offline",
           lastFrameAt: proc.lastFrameAt,
         });
+
+        await redis.publish(RedisEventNames.CAMERA_STATE_CHANGED, JSON.stringify({
+          cameraId,
+          status: "offline",
+          lastFrameAt: proc.lastFrameAt,
+        }))
+        return;
       }
 
       await redis.hset(RedisEventNames.CAMERA_STATE(cameraId), {
         lastFrameAt: proc.lastFrameAt,
       })
+      await redis.publish(RedisEventNames.CAMERA_STATE_CHANGED, JSON.stringify({
+        cameraId,
+        status: "online",
+        lastFrameAt: proc.lastFrameAt,
+      }))
     }, envConfig.watchdogInterval);
 
 
@@ -132,6 +144,8 @@ export class CameraController {
     return ingress;
   }
 
+
+  // when stop calls at the end exit event fires automatically by OS
   async stop(cameraId: string) {
     const proc = this.processes.get(cameraId);
     if (!proc) return;
@@ -142,9 +156,5 @@ export class CameraController {
         proc.ffmpeg.kill("SIGKILL");
       }
     }, 3000);
-    await redis.hset(RedisEventNames.CAMERA_STATE(cameraId), {
-      status: "offline",
-      stoppedAt: Date.now(),
-    });
   }
 }

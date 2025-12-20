@@ -16,4 +16,6 @@ export function connectRedis(){
         console.log("Redis error:", err);
     });
 }
+
+export const bboxRedis = redis.duplicate();
 export default redis;

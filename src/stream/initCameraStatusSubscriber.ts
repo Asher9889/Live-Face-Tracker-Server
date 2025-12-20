@@ -12,7 +12,11 @@ function initCameraStatusSubscriber() {
         const data = JSON.parse(message);
         wsServer.broadcast({
             type: RedisEventNames.CAMERA_STATE_CHANGED,
-            ...data,
+            payload: {
+                cameraId: data.cameraId,
+                status: data.status,
+                lastFrameAt: data.lastFrameAt,
+            }
         }); // data = cameraId, status, lastFrameAt
     })
 }
