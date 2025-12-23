@@ -39,13 +39,14 @@ export default class CameraRepository implements ICameraRepository {
         cameras.forEach((camera , index) => {
             const state = results[index]; 
             if(!state) return;
-            let redisState = state[1] as Record<"status" | "lastFrameAt" | "stoppedAt" | "ingressId", string>;
+            let redisState = state[1] as Record<"status" | "lastFrameAt" | "stoppedAt" | "ingressId" | "streamStartTs", string>;
             const code = camera.code;
             cameraStatus.push({
                 code: code,
                 status: redisState.status,
                 lastFrameAt: redisState.lastFrameAt ? Number(redisState.lastFrameAt) : null, 
-                stoppedAt: redisState.stoppedAt ? Number(redisState.stoppedAt) : null
+                stoppedAt: redisState.stoppedAt ? Number(redisState.stoppedAt) : null,
+                streamStartTs: redisState.streamStartTs ? Number(redisState.streamStartTs) : null
             })
         })
 

@@ -41,4 +41,5 @@ export interface CameraStatusDTO {
     status: string;
     lastFrameAt: number | null;
     stoppedAt: number | null;
+    streamStartTs: number | null;
 }

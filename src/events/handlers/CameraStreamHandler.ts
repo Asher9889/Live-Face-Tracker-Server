@@ -9,8 +9,6 @@ export default class CameraStreamHandler {
     initialize() { // live-face-tracker:camera-event:entry_1:status
       EventBus.on(EventNames.CAMERA_STREAM_STARTED, async (data: { cameraCode: string; streamStartTs: number }) => {
 
-        console.log('I am in CameraStreamHandler.initialize')
-
         await redis.hset(RedisEventNames.CAMERA_STATE(data.cameraCode), {
           streamStartTs: data.streamStartTs,
         });
