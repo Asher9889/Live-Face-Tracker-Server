@@ -1,10 +1,13 @@
 RTSP Camera
 ↓
-FFmpeg (RTSP → RTP)
+FFmpeg (RTSP → RTMP)
+↓
+Ingress (LiveKit)
 ↓
 LiveKit (WebRTC SFU)
 ↓
 Browser <video>
+
 
 Python AI
 ↓ Redis

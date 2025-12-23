@@ -1,5 +1,5 @@
 import { StatusCodes } from "http-status-codes";
-import { Redis } from "../../../db";
+import { redis } from "../../../db";
 import { RedisEventNames } from "../../../events/EventNames";
 import { ApiError } from "../../../utils";
 import { CameraStatusDTO } from "../application/dtos/CreateCameraDTO";
@@ -23,7 +23,7 @@ export default class CameraRepository implements ICameraRepository {
     async getAllStatus(): Promise<CameraStatusDTO[]> {
         const cameras = await CameraModel.find({}, { _id: 0, code: 1, status: 1}).lean();
 
-        const pipeline = Redis.pipeline();
+        const pipeline = redis.pipeline();
         cameras.forEach(camera => {
             pipeline.hgetall(RedisEventNames.CAMERA_STATE(camera.code));
         });

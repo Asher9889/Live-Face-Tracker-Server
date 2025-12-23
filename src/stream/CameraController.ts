@@ -5,7 +5,8 @@ import redis from "../db/connectRedis";
 import { ApiError } from "../utils";
 import { StatusCodes } from "http-status-codes";
 import { envConfig } from "../config";
-import { RedisEventNames } from "../events/EventNames";
+import EventNames, { RedisEventNames } from "../events/EventNames";
+import { EventBus } from "../events";
 
 type CameraProcess = {
   ffmpeg: ChildProcess;
@@ -35,16 +36,35 @@ export class CameraController {
 
     //Start FFmpeg (RTSP → RTMP)
     const ffmpeg = spawn("ffmpeg", [
+      // RTSP input
       "-rtsp_transport", "tcp",
+      "-fflags", "nobuffer",
+      "-flags", "low_delay",
+      "-analyzeduration", "1000000",
+      "-probesize", "1000000",
+
       "-i", rtspUrl,
+
+      // Video encode
       "-an",
       "-c:v", "libx264",
       "-preset", "ultrafast",
       "-tune", "zerolatency",
+      "-profile:v", "baseline",
+      "-pix_fmt", "yuv420p",
+
+      // FORCE sane timing
+      "-r", "25",
+      "-g", "50",
+      "-keyint_min", "50",
+      "-sc_threshold", "0",
+
+      // RTMP output
       "-f", "flv",
-      "-rtmp_live", "live",
+      "-flvflags", "no_duration_filesize",
       rtmpUrl,
     ]);
+
 
     // Initialize in-memory state
     this.processes.set(cameraId, {
@@ -73,7 +93,6 @@ export class CameraController {
           lastFrameAt: proc.lastFrameAt,
           ingressId: proc.ingressId,
         });
-
         await redis.publish(
           RedisEventNames.CAMERA_STATE_CHANGED,
           JSON.stringify({
@@ -82,6 +101,10 @@ export class CameraController {
             lastFrameAt: proc.lastFrameAt,
           })
         );
+        EventBus.emit(EventNames.CAMERA_STREAM_STARTED, { 
+          cameraCode: cameraId,
+          streamStartTs: Date.now(),
+        });
       }
     });
 

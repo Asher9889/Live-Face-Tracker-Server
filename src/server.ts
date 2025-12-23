@@ -7,6 +7,7 @@ import apiRouter from "./routes";
 import http from "http";
 import { initWSSStreaming, initCameraStatusSubscriber } from "./stream";
 import initCameraBBoxSubscriber from "./stream/initCameraBBoxSubscriber";
+import { initEventHandlers } from "./events/Event";
 
 connectMongoDB();
 connectRedis();
@@ -14,6 +15,7 @@ connectRedis();
 const app = express();
 const server = http.createServer(app);
 
+initEventHandlers();
 initWSSStreaming(server);
 initCameraStatusSubscriber();
 initCameraBBoxSubscriber();

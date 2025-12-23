@@ -1,4 +1,4 @@
 import connectMongoDB from "./connectMongoDB";
-import Redis, { bboxRedis, connectRedis } from "./connectRedis";
+import redis, { connectRedis, redisSub } from "./connectRedis";
 
-export { bboxRedis, connectMongoDB, connectRedis, Redis };
+export {  connectMongoDB, connectRedis, redis, redisSub };

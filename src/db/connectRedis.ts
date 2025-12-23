@@ -17,5 +17,5 @@ export function connectRedis(){
     });
 }
 
-export const bboxRedis = redis.duplicate();
-export default redis;
+export const redisSub = redis.duplicate(); // subscribe only
+export default redis;  // commands + publish

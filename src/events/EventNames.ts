@@ -4,6 +4,10 @@ const EventNames = {
   EMPLOYEE_DELETED: "employee.deleted",
 
   EMBEDDING_UPDATED: "embedding.updated",
+
+  // Camera events
+  CAMERA_STREAM_STARTED: "camera:stream:started",
+  CAMERA_STREAM_STOPPED: "camera:stream:stopped",
 } as const;
 
 // for pub/bub

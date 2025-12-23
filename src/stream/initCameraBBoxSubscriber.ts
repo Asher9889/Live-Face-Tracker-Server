@@ -1,23 +1,31 @@
-import { bboxRedis } from "../db";
+import { redisSub } from "../db";
 import { WS_EVENTS } from "../events";
 import { wsServer } from "./initStream";
+import normalizeBBox from "./normalizeBBox";
 
 export default function initCameraBBoxSubscriber() {
-    bboxRedis.psubscribe("live-face-tracker:camera-events:*");
+    redisSub.psubscribe("live-face-tracker:camera-events:*");
 
-    bboxRedis.on("pmessage", (_pattern, channel, message) => {
+    redisSub.on("pmessage", (_pattern, channel, message) => {
         // channel = live-face-tracker:camera-events:entry_1
         const cameraCode = channel.split(":").pop();
 
-        const payload = JSON.parse(message);
+        const payload = JSON.parse(message); // track_update
+
+        let normalizedBBox;
+        if(payload.event !== "track_lost") {
+            normalizedBBox = normalizeBBox(payload.bbox, payload.frame_width, payload.frame_height);
+        }
+
 
         wsServer.broadcast({
             type: WS_EVENTS.FACE_BBOX,
             payload : {
+                event: payload.event,
                 cameraCode,
                 trackId: payload.track_id,
                 personId: payload.person_id,
-                bbox: payload.bbox,
+                bbox: normalizedBBox ?? {},
                 timestamp: payload.timestamp,
                 similarity: payload.similarity,
                 frameWidth: payload.frame_width,
