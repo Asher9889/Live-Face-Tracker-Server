@@ -11,7 +11,7 @@ export class WSStreamServer {
     this.wss.on("connection", (ws, req) => {
     // ws another ws object represent the unique/different client
       this.clients.add(ws);
-      console.log("Total Client connected during connection", this.clients.size);
+
 
       ws.on("ping", () => {
         ws.pong();
@@ -19,12 +19,10 @@ export class WSStreamServer {
 
       ws.on("error", () => {
         this.clients.delete(ws);
-        console.log("Total Client connected during error", this.clients.size);
       });
 
       ws.on("close", () => {
         this.clients.delete(ws);
-        console.log("Total Client connected during close", this.clients.size);
       });
     });
 

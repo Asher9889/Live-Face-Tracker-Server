@@ -34,34 +34,48 @@ export class CameraController {
       throw new Error("RTMP ingress URL not returned");
     }
 
-    //Start FFmpeg (RTSP → RTMP)
-    const ffmpeg = spawn("ffmpeg", [
-      // RTSP input
-      "-rtsp_transport", "tcp",
-      "-fflags", "nobuffer",
-      "-flags", "low_delay",
-      "-analyzeduration", "1000000",
-      "-probesize", "1000000",
+    // Start FFmpeg (RTSP → RTMP)
+    // const ffmpeg = spawn("ffmpeg", [
+    //   // RTSP input
+    //   "-rtsp_transport", "tcp",
+    //   "-fflags", "nobuffer",
+    //   "-flags", "low_delay",
+    //   "-analyzeduration", "1000000",
+    //   "-probesize", "1000000",
 
+    //   "-i", rtspUrl,
+
+    //   // Video encode
+    //   "-an",
+    //   "-c:v", "libx264",
+    //   "-preset", "ultrafast",
+    //   "-tune", "zerolatency",
+    //   "-profile:v", "baseline",
+    //   "-pix_fmt", "yuv420p",
+
+    //   // FORCE sane timing
+    //   "-r", "25",
+    //   "-g", "50",
+    //   "-keyint_min", "50",
+    //   "-sc_threshold", "0",
+
+    //   // RTMP output
+    //   "-f", "flv",
+    //   "-flvflags", "no_duration_filesize",
+    //   rtmpUrl,
+    // ]);
+
+    const ffmpeg = spawn("ffmpeg", [
+      "-rtsp_transport", "tcp",
       "-i", rtspUrl,
 
-      // Video encode
       "-an",
       "-c:v", "libx264",
       "-preset", "ultrafast",
       "-tune", "zerolatency",
-      "-profile:v", "baseline",
       "-pix_fmt", "yuv420p",
 
-      // FORCE sane timing
-      "-r", "25",
-      "-g", "50",
-      "-keyint_min", "50",
-      "-sc_threshold", "0",
-
-      // RTMP output
       "-f", "flv",
-      "-flvflags", "no_duration_filesize",
       rtmpUrl,
     ]);
 
@@ -101,7 +115,7 @@ export class CameraController {
             lastFrameAt: proc.lastFrameAt,
           })
         );
-        EventBus.emit(EventNames.CAMERA_STREAM_STARTED, { 
+        EventBus.emit(EventNames.CAMERA_STREAM_STARTED, {
           cameraCode: cameraId,
           streamStartTs: Date.now(),
         });

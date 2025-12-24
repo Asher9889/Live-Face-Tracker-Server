@@ -15,7 +15,7 @@ connectRedis();
 const app = express();
 const server = http.createServer(app);
 
-initEventHandlers();
+initEventHandlers(); // for internal event_emitter 
 initWSSStreaming(server);
 initCameraStatusSubscriber();
 initCameraBBoxSubscriber();

@@ -21,7 +21,7 @@ export default class CameraRepository implements ICameraRepository {
         return docs;
     }
     async getAllStatus(): Promise<CameraStatusDTO[]> {
-        const cameras = await CameraModel.find({}, { _id: 0, code: 1, status: 1}).lean();
+        const cameras = await CameraModel.find({}, { _id: 0, code: 1, status: 1, gateType: 1}).lean();
 
         const pipeline = redis.pipeline();
         cameras.forEach(camera => {
@@ -50,6 +50,6 @@ export default class CameraRepository implements ICameraRepository {
             })
         })
 
-        return cameraStatus;
+        return cameraStatus; 
     }
 }
