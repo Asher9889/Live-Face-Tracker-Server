@@ -8,9 +8,11 @@ import http from "http";
 import { initWSSStreaming, initCameraStatusSubscriber } from "./stream";
 import initCameraBBoxSubscriber from "./stream/initCameraBBoxSubscriber";
 import { initEventHandlers } from "./events/Event";
+import loadCameraConfigsToRedis from "./module/cameras/infrastructure/camera.cache";
 
 connectMongoDB();
 connectRedis();
+loadCameraConfigsToRedis()
 
 const app = express();
 const server = http.createServer(app);

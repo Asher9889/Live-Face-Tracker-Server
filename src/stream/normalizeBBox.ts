@@ -12,6 +12,9 @@ function normalizeBBox(
   frameWidth: number,
   frameHeight: number
 ): NormalizedBBox | null {
+  if(!bbox || !Array.isArray(bbox) || bbox.length < 4) {
+    return null;
+  }
   if (bbox.length < 4 || frameWidth <= 0 || frameHeight <= 0) {
     return null;
   }

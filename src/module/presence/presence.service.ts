@@ -15,9 +15,15 @@ interface EmployeePresence {
     exitTimerId?: NodeJS.Timeout | null;
 };
 
+interface ICamera {
+    code: string;
+    gateType: GateRole;
+}
+
 
 export default class PresenceService {
     private employeeMap = new Map<string, EmployeePresence>();
+    private cameraMap = new Map<string, ICamera>();
 
 
     constructor() { 

@@ -52,12 +52,12 @@ export default function initCameraBBoxSubscriber() {
             case "person_entered":
                 presenceService.onPersonEntered({ employeeId: person_id!!, cameraCode: payload.camera_code, gateRole: "ENTRY", trackId: track_id, eventTs: eventTs });
                 break;
-            case "person_update": 
-                presenceService.onPersonUpdate({ employeeId: person_id!!, trackId: track_id, eventTs: eventTs });
-                break;
-            case "track_lost": 
-                presenceService.onTrackLost({ employeeId: person_id!!, trackId: track_id, });
-                break;
+            // case "person_update": 
+            //     presenceService.onPersonUpdate({ employeeId: person_id!!, trackId: track_id, eventTs: eventTs });
+            //     break;
+            // case "track_lost": 
+            //     presenceService.onTrackLost({ employeeId: person_id!!, trackId: track_id, });
+            //     break;
         }
     });
 }
