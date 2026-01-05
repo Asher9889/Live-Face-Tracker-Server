@@ -5,7 +5,7 @@ import { wsServer } from "./initStream";
 import normalizeBBox from "./normalizeBBox";
 
 type FaceBBoxPayload = {
-    event: "track_update" | "track_lost" | "person_update" | "person_entered";
+    event: "track_update" | "track_lost" | "person_update" | "person_entered" | "person_exit";
     camera_code: string;
     track_id: number;
     bbox: [number, number, number, number];
@@ -50,8 +50,12 @@ export default function initCameraBBoxSubscriber() {
 
         switch (payload.event) {
             case "person_entered":
-                presenceService.onPersonEntered({ employeeId: person_id!!, cameraCode: payload.camera_code, gateRole: "ENTRY", trackId: track_id, eventTs: eventTs });
+                presenceService.onPersonEntered({ employeeId: person_id!!, cameraCode: payload.camera_code, gateRole: "ENTRY", trackId: track_id, eventTs: eventTs, confidence: payload?.similarity ?? 0 });
                 break;
+
+            case "person_exit":
+                presenceService.onPersonExit({ employeeId: person_id!!, cameraCode: payload.camera_code, gateRole: "EXIT", trackId: track_id, eventTs: eventTs, confidence: payload?.similarity ?? 0 });
+                break;    
             // case "person_update": 
             //     presenceService.onPersonUpdate({ employeeId: person_id!!, trackId: track_id, eventTs: eventTs });
             //     break;

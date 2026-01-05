@@ -1,80 +1,88 @@
-import mongoose from "mongoose";
-import EmployeePresence from "./presence.model";
-import { redis } from "../../db";
+import PresenceModel from "./presence.model";
+import PresenceLogService from "./logs/presence-log.service";
 
 type PresenceState = "IN" | "OUT";
 type GateRole = "ENTRY" | "EXIT";
 
-interface EmployeePresence {
+interface RuntimePresence {
     employeeId: string;
     state: PresenceState;
     lastSeenAt: number;
     lastGate: GateRole;
-    cameraCode: string;
+    entryCameraCode?: string | undefined;
+    exitCameraCode?: string | undefined;
     activeTrackIds: Set<number>;
     exitTimerId?: NodeJS.Timeout | null;
-};
-
-interface ICamera {
-    code: string;
-    gateType: GateRole;
 }
 
-
 export default class PresenceService {
-    private employeeMap = new Map<string, EmployeePresence>();
-    private cameraMap = new Map<string, ICamera>();
+    private employeeMap = new Map<string, RuntimePresence>();
 
+    private readonly EXIT_TIMEOUT_ENTRY = 5 * 60 * 1000; // 5 min
+    private readonly EXIT_TIMEOUT_EXIT = 45 * 1000;      // 45 sec
 
-    constructor() { 
-        
-    }
+    constructor(private readonly presenceLogService: PresenceLogService) { }
 
-    private EXIT_TIMEOUT_MS = 2 * 60 * 1000;
+    // ==========================
+    // STARTUP RECOVERY
+    // ==========================
+    async recoverFromDBOnStartup() {
+        const now = Date.now();
 
-    // state transition | Must be private | mutate state.
-    private async markIN(presence: EmployeePresence) {
-        presence.state = "IN";
+        const activePresences = await PresenceModel.find({ state: "IN" }).lean();
 
-        const empIdStr = presence.employeeId;
+        for (const record of activePresences) {
+            const presence: RuntimePresence = {
+                employeeId: record.employeeId,
+                state: "IN",
+                lastSeenAt: record.lastSeenAt,            // ✅ FIX
+                lastGate: record.lastGate,                // ✅ FIX
+                entryCameraCode:
+                    record.lastGate === "ENTRY"
+                        ? record.lastCameraCode
+                        : undefined,
+                exitCameraCode:
+                    record.lastGate === "EXIT"
+                        ? record.lastCameraCode
+                        : undefined,
+                activeTrackIds: new Set(),
+                exitTimerId: null,
+            };
 
-        // if (mongoose.Types.ObjectId.isValid(empIdStr)) {
-        //     const empObjectId = new mongoose.Types.ObjectId(empIdStr);
+            this.employeeMap.set(record.employeeId, presence);
 
-            await EmployeePresence.findOneAndUpdate(
-                { employeeId: empIdStr },
-                {
-                    employeeId: empIdStr,
-                    cameraCode: presence.cameraCode,
-                    state: "IN",
-                    lastChangedAt: Date.now(),
-                },
-                { upsert: true }
-            );
-        // } else {
-        //     console.error(`[ERROR] Invalid ObjectId received: ${empIdStr}`);
-        // }
-        console.log(`[PRESENCE] EMP ${presence.employeeId} → IN (${presence.cameraCode})`);
-    }
+            const idleTime = now - presence.lastSeenAt;
+            const timeout =
+                presence.lastGate === "EXIT"
+                    ? this.EXIT_TIMEOUT_EXIT
+                    : this.EXIT_TIMEOUT_ENTRY;
 
-    private async markOUT(presence: EmployeePresence) {
-        presence.state = "OUT";
-        presence.activeTrackIds.clear();
-        presence.exitTimerId = null;
+            const timeoutLeft = timeout - idleTime;
 
-        await EmployeePresence.findOneAndUpdate(
-            { employeeId: presence.employeeId },
-            {
-                state: "OUT",
-                lastChangedAt: Date.now(),
+            if (timeoutLeft <= 0) {
+                await this.markOUT(presence, "SYSTEM_RECOVERY");
+            } else {
+                this.scheduleExit(presence, timeoutLeft);
             }
-        );
-        console.log(`[PRESENCE] EMP ${presence.employeeId} → OUT (${presence.cameraCode})`);
+        }
+
+        console.log(`[PRESENCE] Recovery completed: ${this.employeeMap.size} active users`);
     }
 
-    // Event handlers (public) called by AI events
-    async onPersonEntered(params: { employeeId: string, cameraCode: string, gateRole: GateRole, trackId: number, eventTs: number; }) {
-        const { employeeId, trackId, cameraCode, gateRole, eventTs } = params;
+
+    // ==========================
+    // ENTRY / HEARTBEAT
+    // ==========================
+    async onPersonEntered(params: {
+        employeeId: string;
+        cameraCode: string;
+        gateRole: GateRole;
+        trackId: number;
+        eventTs: number;
+        confidence: number;
+    }) {
+        const { employeeId, cameraCode, gateRole, trackId, eventTs, confidence } = params;
+
         let presence = this.employeeMap.get(employeeId);
         if (!presence) {
             presence = {
@@ -82,75 +90,154 @@ export default class PresenceService {
                 state: "OUT",
                 lastSeenAt: eventTs,
                 lastGate: gateRole,
-                cameraCode,
                 activeTrackIds: new Set(),
-                exitTimerId: null,
             };
             this.employeeMap.set(employeeId, presence);
         }
 
-        // Track bookkeeping
-        presence.activeTrackIds.add(trackId);
+        // heartbeat
         presence.lastSeenAt = eventTs;
         presence.lastGate = gateRole;
-        presence.cameraCode = cameraCode;
+        presence.activeTrackIds.add(trackId);
 
-        // Cancel pending exit
+        if (gateRole === "ENTRY") {
+            presence.entryCameraCode = cameraCode;
+        } else {
+            presence.exitCameraCode = cameraCode;
+        }
+
+        // cancel pending exit
         if (presence.exitTimerId) {
             clearTimeout(presence.exitTimerId);
             presence.exitTimerId = null;
         }
 
         if (presence.state === "OUT" && gateRole === "ENTRY") {
-            await this.markIN(presence);
+            await this.markIN(presence, cameraCode, eventTs, confidence);
         }
-
-        // if (presence.state === "IN" && gateRole === "EXIT") {
-        //     this.startExitTimer(presence);
-        // }
-
     }
 
-
-    async onPersonUpdate(params: { employeeId: string; trackId: number; eventTs: number; }) {
-        const { employeeId, trackId, eventTs } = params;
+    // ==========================
+    // EXIT SIGNAL
+    // ==========================
+    onPersonExit(params: {
+        employeeId: string;
+        trackId: number;
+        eventTs: number;
+        cameraCode: string;
+        gateRole: string;
+        confidence: number;
+    }) {
+        const { employeeId, trackId, eventTs, cameraCode, confidence } = params;
         const presence = this.employeeMap.get(employeeId);
-        if (!presence) return;
+        if (!presence || presence.state === "OUT") return;
 
         presence.lastSeenAt = eventTs;
-        presence.activeTrackIds.add(trackId);
-        // Cancel exit if person reappeared
+        presence.activeTrackIds.delete(trackId);
+
+        if (presence.activeTrackIds.size > 0) return;
+
+        const timeout = presence.lastGate === "EXIT" ? this.EXIT_TIMEOUT_EXIT : this.EXIT_TIMEOUT_ENTRY;
+
+        this.scheduleExit(presence, timeout);
+    }
+
+    // ==========================
+    // ⏱ EXIT SCHEDULER
+    // ==========================
+    private scheduleExit(presence: RuntimePresence, timeout: number) {
         if (presence.exitTimerId) {
             clearTimeout(presence.exitTimerId);
-            presence.exitTimerId = null;
         }
-    }
-
-
-    async onTrackLost(params: { employeeId: string; trackId: number; }) {
-        const { employeeId, trackId } = params;
-        const presence = this.employeeMap.get(employeeId);
-        if (!presence) return;
-        presence.activeTrackIds.delete(trackId);
-        if (presence.activeTrackIds.size === 0) {
-            this.startExitTimer(presence);
-        }
-    }
-
-//     /**
-//   * Exit debounce logic
-//   */
-    private startExitTimer(presence: EmployeePresence) {
-        if (presence.exitTimerId) return;
 
         presence.exitTimerId = setTimeout(async () => {
-            const now = Date.now();
-            const idle = now - presence.lastSeenAt;
-
-            if (idle >= this.EXIT_TIMEOUT_MS && presence.state === "IN") {
-                await this.markOUT(presence);
+            const idle = Date.now() - presence.lastSeenAt;
+            if (idle >= timeout && presence.state === "IN") {
+                await this.markOUT(presence, "AUTO_EXIT_TIMEOUT");
             }
-        }, this.EXIT_TIMEOUT_MS);
+        }, timeout);
     }
+
+
+
+    // ==========================
+    // MARK IN
+    // ==========================
+    private async markIN(
+        presence: RuntimePresence,
+        cameraCode: string,
+        eventTs: number,
+        confidence: number
+    ) {
+        const prevState = presence.state;
+        presence.state = "IN";
+
+        await PresenceModel.findOneAndUpdate(
+            { employeeId: presence.employeeId },
+            {
+                employeeId: presence.employeeId,
+                state: "IN",
+                lastSeenAt: eventTs,
+                lastChangedAt: eventTs,
+                lastGate: "ENTRY",
+                lastCameraCode: cameraCode,
+            },
+            { upsert: true }
+        );
+
+        await this.presenceLogService.insertLog({
+            employeeId: presence.employeeId,
+            eventType: "ENTRY_DETECTED",
+            fromState: prevState,
+            toState: "IN",
+            cameraCode,
+            occurredAt: eventTs,
+            source: "face_recognition",
+            confidence,
+        });
+
+        console.log(`[PRESENCE] ${presence.employeeId} → IN`);
+    }
+
+
+    // ==========================
+    // MARK OUT
+    // ==========================
+
+    private async markOUT(
+        presence: RuntimePresence,
+        reason: "EXIT_DETECTED" | "AUTO_EXIT_TIMEOUT" | "SYSTEM_RECOVERY" = "AUTO_EXIT_TIMEOUT"
+    ) {
+        const prevState = presence.state;
+        presence.state = "OUT";
+        presence.activeTrackIds.clear();
+        presence.exitTimerId = null;
+
+        const cameraCode = presence.exitCameraCode ?? presence.entryCameraCode ?? "unknown";
+
+        await PresenceModel.findOneAndUpdate(
+            { employeeId: presence.employeeId, state: "IN" },
+            {
+                state: "OUT",
+                lastChangedAt: Date.now(),
+                lastGate: presence.lastGate,
+                lastCameraCode: cameraCode,
+            }
+        );
+
+        await this.presenceLogService.insertLog({
+            employeeId: presence.employeeId,
+            eventType: reason,
+            fromState: prevState,
+            toState: "OUT",
+            cameraCode,
+            occurredAt: Date.now(),
+            source: reason === "EXIT_DETECTED" ? "face_recognition" : "system",
+            note: reason === "AUTO_EXIT_TIMEOUT" ? "No boundary activity within timeout" : undefined,
+        });
+
+        console.log(`[PRESENCE] ${presence.employeeId} → OUT (${reason})`);
+    }
+
 
 }

@@ -12,6 +12,7 @@ export class WSStreamServer {
     // ws another ws object represent the unique/different client
       this.clients.add(ws);
 
+      console.log("New client connected. Total clients:", this.clients.size);
 
       ws.on("ping", () => {
         ws.pong();
@@ -34,7 +35,6 @@ export class WSStreamServer {
 
   broadcast(data: Record<string, any>) {
     if(this.clients.size === 0) return;
-    console.log("Broadcasting to", this.clients.size, "clients");
 
     for(let client of this.clients){
       if(client.readyState === WebSocket.OPEN) { // 1

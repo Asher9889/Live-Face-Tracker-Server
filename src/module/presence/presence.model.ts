@@ -1,25 +1,31 @@
 import mongoose, { Document } from "mongoose";
-
-export const ENTRY_TYPE = {
-  IN: "IN",
-  OUT: "OUT",
-} as const;
+import { PRESENCE_STATE, PresenceState, GateRole, GATE_ROLE } from "./presence.types";
 
 interface IPresenceSchemaData extends Document {
-    employeeId: string;
-    cameraCode: string;
-    state: typeof ENTRY_TYPE[keyof typeof ENTRY_TYPE];
-    lastChangedAt: number;
+  employeeId: string;
+  state: PresenceState; // Current session state
+
+  // Boundary timestamps
+  lastSeenAt: number;       // last time ANY gate saw the person
+  lastChangedAt: number;    // last time state changed (IN <-> OUT)
+
+  // Boundary context
+  lastGate: GateRole;       // ENTRY or EXIT
+  lastCameraCode: string;   // which camera last saw the person
 }
 
 
 const PresenceSchema = new mongoose.Schema<IPresenceSchemaData>({
   employeeId: { type: String, required: true },
-  cameraCode: { type: String, required: true },
-  state: { type: String, enum: Object.values(ENTRY_TYPE) , required: true },
-  lastChangedAt: { type: Number, required: true },
+  state: { type: String, enum: Object.values(PRESENCE_STATE) , required: true },
+
+  lastSeenAt: { type: Number, required: true, index: true },
+  lastChangedAt: { type: Number, required: true, index: true },
+
+  lastGate: { type: String, enum: Object.values(GATE_ROLE), required: true },
+  lastCameraCode: { type: String, required: true, index: true },
 }, { versionKey: false , timestamps: true });
 
-const EmployeePresence = mongoose.model("employee_presence", PresenceSchema);
+const PresenceModel = mongoose.model("employee_presence", PresenceSchema);
 
-export default EmployeePresence;
+export default PresenceModel;

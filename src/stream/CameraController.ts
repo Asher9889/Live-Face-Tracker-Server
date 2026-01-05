@@ -92,6 +92,7 @@ export class CameraController {
       const log = buffer.toString();
 
       if (!log.includes("frame=")) {
+        console.log("issue to start stream", log);
         return;
       }
 
