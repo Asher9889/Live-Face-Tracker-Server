@@ -20,7 +20,7 @@ export class CameraController {
 
   async start(cameraId: string, rtspUrl: string): Promise<IngressInfo> {
     if (this.processes.has(cameraId)) {
-      throw new ApiError(StatusCodes.CONFLICT, "Camera already running");
+      throw new ApiError(StatusCodes.OK, "Camera already running");
     }
 
     //Create ingress (THIS creates the LiveKit participant)
@@ -92,7 +92,7 @@ export class CameraController {
       const log = buffer.toString();
 
       if (!log.includes("frame=")) {
-        console.log("issue to start stream", log);
+        console.log("issue to start stream: ", log);
         return;
       }
 

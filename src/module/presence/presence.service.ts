@@ -23,9 +23,7 @@ export default class PresenceService {
 
     constructor(private readonly presenceLogService: PresenceLogService) { }
 
-    // ==========================
     // STARTUP RECOVERY
-    // ==========================
     async recoverFromDBOnStartup() {
         const now = Date.now();
 
@@ -69,10 +67,7 @@ export default class PresenceService {
         console.log(`[PRESENCE] Recovery completed: ${this.employeeMap.size} active users`);
     }
 
-
-    // ==========================
-    // ENTRY / HEARTBEAT
-    // ==========================
+    // ENTRY
     async onPersonEntered(params: {
         employeeId: string;
         cameraCode: string;
@@ -95,6 +90,7 @@ export default class PresenceService {
             this.employeeMap.set(employeeId, presence);
         }
 
+        console.log("onPersonEntered", params);
         // heartbeat
         presence.lastSeenAt = eventTs;
         presence.lastGate = gateRole;
@@ -117,20 +113,15 @@ export default class PresenceService {
         }
     }
 
-    // ==========================
     // EXIT SIGNAL
-    // ==========================
-    onPersonExit(params: {
-        employeeId: string;
-        trackId: number;
-        eventTs: number;
-        cameraCode: string;
-        gateRole: string;
-        confidence: number;
-    }) {
+    onPersonExit(params: { employeeId: string; trackId: number; eventTs: number; cameraCode: string; gateRole: string; confidence: number;}) {
+        console.log("onPersonExit", params);
         const { employeeId, trackId, eventTs, cameraCode, confidence } = params;
         const presence = this.employeeMap.get(employeeId);
-        if (!presence || presence.state === "OUT") return;
+        if (!presence || presence.state === "OUT") {
+            console.log("Returning due to user state is out or not present.")
+            return;
+        }
 
         presence.lastSeenAt = eventTs;
         presence.activeTrackIds.delete(trackId);
@@ -142,9 +133,7 @@ export default class PresenceService {
         this.scheduleExit(presence, timeout);
     }
 
-    // ==========================
     // ⏱ EXIT SCHEDULER
-    // ==========================
     private scheduleExit(presence: RuntimePresence, timeout: number) {
         if (presence.exitTimerId) {
             clearTimeout(presence.exitTimerId);
@@ -158,11 +147,7 @@ export default class PresenceService {
         }, timeout);
     }
 
-
-
-    // ==========================
     // MARK IN
-    // ==========================
     private async markIN(
         presence: RuntimePresence,
         cameraCode: string,
@@ -199,11 +184,7 @@ export default class PresenceService {
         console.log(`[PRESENCE] ${presence.employeeId} → IN`);
     }
 
-
-    // ==========================
     // MARK OUT
-    // ==========================
-
     private async markOUT(
         presence: RuntimePresence,
         reason: "EXIT_DETECTED" | "AUTO_EXIT_TIMEOUT" | "SYSTEM_RECOVERY" = "AUTO_EXIT_TIMEOUT"
