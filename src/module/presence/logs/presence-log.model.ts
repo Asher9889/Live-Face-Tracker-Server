@@ -1,16 +1,11 @@
 import mongoose, { Document, Schema } from "mongoose";
+import { EXIT_TYPE, ExitType } from "../../../domain/types";
 
-export type PresenceLogEvent =
-  | "ENTRY_DETECTED"
-  | "EXIT_DETECTED"
-  | "AUTO_EXIT_TIMEOUT"
-  | "SYSTEM_RECOVERY"
-  | "MANUAL_CORRECTION";
 
 export interface IPresenceLog extends Document {
   employeeId: string;
 
-  eventType: PresenceLogEvent;
+  eventType: ExitType;
 
   fromState?: "IN" | "OUT";
   toState?: "IN" | "OUT";
@@ -32,13 +27,7 @@ const PresenceLogSchema = new Schema<IPresenceLog>(
 
     eventType: {
       type: String,
-      enum: [
-        "ENTRY_DETECTED",
-        "EXIT_DETECTED",
-        "AUTO_EXIT_TIMEOUT",
-        "SYSTEM_RECOVERY",
-        "MANUAL_CORRECTION",
-      ],
+      enum: EXIT_TYPE,
       required: true,
     },
 
@@ -64,7 +53,4 @@ const PresenceLogSchema = new Schema<IPresenceLog>(
 
 PresenceLogSchema.index({ employeeId: 1, occurredAt: 1 });
 
-export const PresenceLogModel = mongoose.model(
-  "employee_presence_logs",
-  PresenceLogSchema
-);
+export const PresenceLogModel = mongoose.model("employees_presence_logs", PresenceLogSchema, "employees_presence_logs");

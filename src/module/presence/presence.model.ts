@@ -26,6 +26,6 @@ const PresenceSchema = new mongoose.Schema<IPresenceSchemaData>({
   lastCameraCode: { type: String, required: true, index: true },
 }, { versionKey: false , timestamps: true });
 
-const PresenceModel = mongoose.model("employee_presence", PresenceSchema);
+const PresenceModel = mongoose.model("employees_presence", PresenceSchema, "employees_presence");
 
 export default PresenceModel;
