@@ -1,9 +1,10 @@
 import { PresenceLogModel } from "./presence-log.model";
+import { PresenceLogType } from "../../../domain/types";
 
 type PresenceLogInput = {
   employeeId: string;
 
-  eventType: "ENTRY_DETECTED" | "EXIT_DETECTED" | "AUTO_EXIT_TIMEOUT" | "SYSTEM_RECOVERY" | "MANUAL_CORRECTION";
+  eventType: PresenceLogType;
 
   fromState?: "IN" | "OUT";
   toState?: "IN" | "OUT";

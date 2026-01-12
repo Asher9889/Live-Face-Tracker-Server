@@ -1,6 +1,8 @@
 import PresenceModel from "./presence.model";
 import PresenceLogService from "./logs/presence-log.service";
 import { PresenceState, GateRole, RuntimePresence } from "./presence.types"; 
+import attendanceService from "../attendance/attendance.service";
+import { ExitType, PresenceLogType } from "../../domain/types";
 export default class PresenceService {
     private presenceMap = new Map<string, RuntimePresence>();
 
@@ -134,11 +136,17 @@ export default class PresenceService {
             confidence,
         });
 
+        await attendanceService.openSession({
+            employeeId: presence.employeeId,
+            entryAt: eventTs,
+            entrySource: "ENTRY_CAMERA",
+        });
+
         console.log(`[PRESENCE] ${presence.employeeId} → IN`);
     }
 
-    private async markOUT(presence: RuntimePresence, reason: "AUTO_EXIT_TIMEOUT" | "SYSTEM_RECOVERY", source: "system" | "face_recognition" | "manual" = "system") {
-        presence.state = "OUT";
+    private async markOUT(presence: RuntimePresence, reason: ExitType, source: "system" | "face_recognition" | "manual" = "system") {
+        presence.state = "OUT"; // 
         presence.exitTimerId = null;
         const exitTs = presence.lastSeenAt;
 
@@ -158,12 +166,18 @@ export default class PresenceService {
 
         await this.logService.insertLog({
             employeeId: presence.employeeId,
-            eventType: reason,
+            eventType: reason as PresenceLogType,
             fromState: "IN",
             toState: "OUT",
             cameraCode,
             occurredAt: exitTs,
             source: source ?? "system",
+        });
+
+        await attendanceService.endSession({
+            employeeId: presence.employeeId,
+            exitAt: exitTs,
+            exitSource: reason,
         });
 
         console.log(`[PRESENCE] ${presence.employeeId} → OUT (${reason})`);
