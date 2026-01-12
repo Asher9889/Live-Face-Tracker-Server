@@ -32,6 +32,13 @@ export default function initCameraBBoxSubscriber() {
         if (payload.event !== "track_lost") {
             normalizedBBox = normalizeBBox(payload.bbox, payload.frame_width, payload.frame_height);
         }
+
+        if(payload.event === "person_exit") {
+            console.log("[Event] person_exit event happened for person", payload.person_id);
+        }
+        if(payload.event === "person_entered") {
+            console.log("[Event] person_entered event happened for person", payload.person_id);
+        }
         wsServer.broadcast({
             type: WS_EVENTS.FACE_BBOX,
             payload: {
@@ -53,7 +60,7 @@ export default function initCameraBBoxSubscriber() {
                 presenceService.onPersonEntered({ employeeId: person_id!!, cameraCode: payload.camera_code, gateRole: "ENTRY", eventTs: eventTs, confidence: payload?.similarity ?? 0 });
                 break;
 
-            case "person_exit":
+            case "person_exit": // person_exit
                 presenceService.onPersonExit({ employeeId: person_id!!, cameraCode: payload.camera_code, eventTs: eventTs, confidence: payload?.similarity ?? 0 });
                 break;    
             // case "person_update": 

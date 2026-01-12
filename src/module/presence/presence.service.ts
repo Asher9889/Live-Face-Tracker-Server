@@ -1,23 +1,10 @@
 import PresenceModel from "./presence.model";
 import PresenceLogService from "./logs/presence-log.service";
-
-type PresenceState = "IN" | "OUT";
-type GateRole = "ENTRY" | "EXIT";
-
-interface RuntimePresence {
-    employeeId: string;
-    state: PresenceState;
-    lastSeenAt: number;
-    lastGate: GateRole;
-    entryCameraCode?: string | undefined;
-    exitCameraCode?: string | undefined;
-    exitTimerId?: NodeJS.Timeout | null;
-}
-
+import { PresenceState, GateRole, RuntimePresence } from "./presence.types"; 
 export default class PresenceService {
     private presenceMap = new Map<string, RuntimePresence>();
 
-    private readonly EXIT_TIMEOUT_AFTER_EXIT_GATE = 45 * 1000; // 45 sec
+    private readonly EXIT_TIMEOUT_AFTER_EXIT_GATE = 0; // 45 sec
     private readonly EXIT_TIMEOUT_AFTER_ENTRY_GATE = 3 * 60 * 60 * 1000; // 3 hours
 
     constructor(private readonly logService: PresenceLogService) { }
@@ -29,7 +16,7 @@ export default class PresenceService {
         for (const record of activeUsers) {
             const presence: RuntimePresence = {
                 employeeId: record.employeeId,
-                state: "IN",
+                state: record.state, // "IN" or "OUT"
                 lastSeenAt: record.lastSeenAt,
                 lastGate: record.lastGate,
                 entryCameraCode: record.lastGate === "ENTRY" ? record.lastCameraCode : undefined,
@@ -43,7 +30,7 @@ export default class PresenceService {
             if (remaining <= 0) {
                 await this.markOUT(presence, "SYSTEM_RECOVERY");
             } else {
-                this.scheduleExit(presence, remaining);
+                this.scheduleExit(presence, remaining, "system");
             }
         }
 
@@ -99,10 +86,10 @@ export default class PresenceService {
 
         const timeout = this.EXIT_TIMEOUT_AFTER_EXIT_GATE;
 
-        this.scheduleExit(presence, timeout);
+        this.scheduleExit(presence, timeout, "face_recognition");
     }
 
-    private scheduleExit(presence: RuntimePresence, timeout: number) {
+    private scheduleExit(presence: RuntimePresence, timeout: number, source: "system" | "face_recognition" | "manual") {
         if (presence.exitTimerId) {
             clearTimeout(presence.exitTimerId);
         }
@@ -111,7 +98,7 @@ export default class PresenceService {
             const idle = Date.now() - presence.lastSeenAt;
 
             if (presence.state === "IN" && presence.lastGate === "EXIT" && idle >= timeout) {
-                await this.markOUT(presence, "AUTO_EXIT_TIMEOUT");
+                await this.markOUT(presence, "AUTO_EXIT_TIMEOUT", source);
             }
         }, timeout);
     }
@@ -150,7 +137,7 @@ export default class PresenceService {
         console.log(`[PRESENCE] ${presence.employeeId} → IN`);
     }
 
-    private async markOUT(presence: RuntimePresence, reason: "AUTO_EXIT_TIMEOUT" | "SYSTEM_RECOVERY") {
+    private async markOUT(presence: RuntimePresence, reason: "AUTO_EXIT_TIMEOUT" | "SYSTEM_RECOVERY", source: "system" | "face_recognition" | "manual" = "system") {
         presence.state = "OUT";
         presence.exitTimerId = null;
         const exitTs = presence.lastSeenAt;
@@ -176,7 +163,7 @@ export default class PresenceService {
             toState: "OUT",
             cameraCode,
             occurredAt: exitTs,
-            source: "system",
+            source: source ?? "system",
         });
 
         console.log(`[PRESENCE] ${presence.employeeId} → OUT (${reason})`);
