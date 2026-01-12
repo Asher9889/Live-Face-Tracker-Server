@@ -11,90 +11,63 @@ interface RuntimePresence {
     lastGate: GateRole;
     entryCameraCode?: string | undefined;
     exitCameraCode?: string | undefined;
-    activeTrackIds: Set<number>;
     exitTimerId?: NodeJS.Timeout | null;
 }
 
 export default class PresenceService {
-    private employeeMap = new Map<string, RuntimePresence>();
+    private presenceMap = new Map<string, RuntimePresence>();
 
-    private readonly EXIT_TIMEOUT_ENTRY = 5 * 60 * 1000; // 5 min
-    private readonly EXIT_TIMEOUT_EXIT = 45 * 1000;      // 45 sec
+    private readonly EXIT_TIMEOUT_AFTER_EXIT_GATE = 45 * 1000; // 45 sec
+    private readonly EXIT_TIMEOUT_AFTER_ENTRY_GATE = 3 * 60 * 60 * 1000; // 3 hours
 
-    constructor(private readonly presenceLogService: PresenceLogService) { }
+    constructor(private readonly logService: PresenceLogService) { }
 
-    // STARTUP RECOVERY
     async recoverFromDBOnStartup() {
         const now = Date.now();
+        const activeUsers = await PresenceModel.find({ state: "IN" }).lean();
 
-        const activePresences = await PresenceModel.find({ state: "IN" }).lean();
-
-        for (const record of activePresences) {
+        for (const record of activeUsers) {
             const presence: RuntimePresence = {
                 employeeId: record.employeeId,
                 state: "IN",
-                lastSeenAt: record.lastSeenAt,            // ✅ FIX
-                lastGate: record.lastGate,                // ✅ FIX
-                entryCameraCode:
-                    record.lastGate === "ENTRY"
-                        ? record.lastCameraCode
-                        : undefined,
-                exitCameraCode:
-                    record.lastGate === "EXIT"
-                        ? record.lastCameraCode
-                        : undefined,
-                activeTrackIds: new Set(),
+                lastSeenAt: record.lastSeenAt,
+                lastGate: record.lastGate,
+                entryCameraCode: record.lastGate === "ENTRY" ? record.lastCameraCode : undefined,
+                exitCameraCode: record.lastGate === "EXIT" ? record.lastCameraCode : undefined,
                 exitTimerId: null,
             };
+            this.presenceMap.set(record.employeeId, presence);
+            const timeout = presence.lastGate === "EXIT" ? this.EXIT_TIMEOUT_AFTER_EXIT_GATE : this.EXIT_TIMEOUT_AFTER_ENTRY_GATE;
+            const remaining = timeout - (now - presence.lastSeenAt);
 
-            this.employeeMap.set(record.employeeId, presence);
-
-            const idleTime = now - presence.lastSeenAt;
-            const timeout =
-                presence.lastGate === "EXIT"
-                    ? this.EXIT_TIMEOUT_EXIT
-                    : this.EXIT_TIMEOUT_ENTRY;
-
-            const timeoutLeft = timeout - idleTime;
-
-            if (timeoutLeft <= 0) {
+            if (remaining <= 0) {
                 await this.markOUT(presence, "SYSTEM_RECOVERY");
             } else {
-                this.scheduleExit(presence, timeoutLeft);
+                this.scheduleExit(presence, remaining);
             }
         }
 
-        console.log(`[PRESENCE] Recovery completed: ${this.employeeMap.size} active users`);
+        console.log(`[PRESENCE] Recovery done. Active users: ${this.presenceMap.size}`);
     }
 
-    // ENTRY
-    async onPersonEntered(params: {
-        employeeId: string;
-        cameraCode: string;
-        gateRole: GateRole;
-        trackId: number;
-        eventTs: number;
-        confidence: number;
-    }) {
-        const { employeeId, cameraCode, gateRole, trackId, eventTs, confidence } = params;
+    async onPersonEntered(params: { employeeId: string; cameraCode: string; gateRole: GateRole; eventTs: number; confidence: number; }) {
+        const { employeeId, cameraCode, gateRole, eventTs, confidence } = params;
 
-        let presence = this.employeeMap.get(employeeId);
+        let presence = this.presenceMap.get(employeeId);
+
         if (!presence) {
             presence = {
                 employeeId,
                 state: "OUT",
                 lastSeenAt: eventTs,
                 lastGate: gateRole,
-                activeTrackIds: new Set(),
             };
-            this.employeeMap.set(employeeId, presence);
+            this.presenceMap.set(employeeId, presence);
         }
 
-        console.log("onPersonEntered", params);
         // heartbeat
         presence.lastSeenAt = eventTs;
         presence.lastGate = gateRole;
-        presence.activeTrackIds.add(trackId);
 
         if (gateRole === "ENTRY") {
             presence.entryCameraCode = cameraCode;
@@ -108,32 +81,27 @@ export default class PresenceService {
             presence.exitTimerId = null;
         }
 
+        // ENTRY → start session
         if (presence.state === "OUT" && gateRole === "ENTRY") {
             await this.markIN(presence, cameraCode, eventTs, confidence);
         }
     }
 
-    // EXIT SIGNAL
-    onPersonExit(params: { employeeId: string; trackId: number; eventTs: number; cameraCode: string; gateRole: string; confidence: number;}) {
-        console.log("onPersonExit", params);
-        const { employeeId, trackId, eventTs, cameraCode, confidence } = params;
-        const presence = this.employeeMap.get(employeeId);
-        if (!presence || presence.state === "OUT") {
-            console.log("Returning due to user state is out or not present.")
-            return;
-        }
+    onPersonExit(params: { employeeId: string; cameraCode: string; eventTs: number; confidence: number; }) {
+        const { employeeId, cameraCode, eventTs } = params;
+
+        const presence = this.presenceMap.get(employeeId);
+        if (!presence || presence.state === "OUT") return;
 
         presence.lastSeenAt = eventTs;
-        presence.activeTrackIds.delete(trackId);
+        presence.lastGate = "EXIT";
+        presence.exitCameraCode = cameraCode;
 
-        if (presence.activeTrackIds.size > 0) return;
-
-        const timeout = presence.lastGate === "EXIT" ? this.EXIT_TIMEOUT_EXIT : this.EXIT_TIMEOUT_ENTRY;
+        const timeout = this.EXIT_TIMEOUT_AFTER_EXIT_GATE;
 
         this.scheduleExit(presence, timeout);
     }
 
-    // ⏱ EXIT SCHEDULER
     private scheduleExit(presence: RuntimePresence, timeout: number) {
         if (presence.exitTimerId) {
             clearTimeout(presence.exitTimerId);
@@ -141,39 +109,37 @@ export default class PresenceService {
 
         presence.exitTimerId = setTimeout(async () => {
             const idle = Date.now() - presence.lastSeenAt;
-            if (idle >= timeout && presence.state === "IN") {
+
+            if (presence.state === "IN" && presence.lastGate === "EXIT" && idle >= timeout) {
                 await this.markOUT(presence, "AUTO_EXIT_TIMEOUT");
             }
         }, timeout);
     }
 
-    // MARK IN
-    private async markIN(
-        presence: RuntimePresence,
-        cameraCode: string,
-        eventTs: number,
-        confidence: number
-    ) {
-        const prevState = presence.state;
+    private async markIN(presence: RuntimePresence, cameraCode: string, eventTs: number, confidence: number) {
         presence.state = "IN";
 
         await PresenceModel.findOneAndUpdate(
             { employeeId: presence.employeeId },
             {
-                employeeId: presence.employeeId,
-                state: "IN",
-                lastSeenAt: eventTs,
-                lastChangedAt: eventTs,
-                lastGate: "ENTRY",
-                lastCameraCode: cameraCode,
+                $set: {
+                    state: "IN",
+                    lastSeenAt: eventTs,
+                    lastChangedAt: eventTs,
+                    lastGate: "ENTRY",
+                    lastCameraCode: cameraCode,
+                },
+                $setOnInsert: {
+                    employeeId: presence.employeeId,
+                },
             },
             { upsert: true }
         );
 
-        await this.presenceLogService.insertLog({
+        await this.logService.insertLog({
             employeeId: presence.employeeId,
             eventType: "ENTRY_DETECTED",
-            fromState: prevState,
+            fromState: "OUT",
             toState: "IN",
             cameraCode,
             occurredAt: eventTs,
@@ -184,41 +150,35 @@ export default class PresenceService {
         console.log(`[PRESENCE] ${presence.employeeId} → IN`);
     }
 
-    // MARK OUT
-    private async markOUT(
-        presence: RuntimePresence,
-        reason: "EXIT_DETECTED" | "AUTO_EXIT_TIMEOUT" | "SYSTEM_RECOVERY" = "AUTO_EXIT_TIMEOUT"
-    ) {
-        const prevState = presence.state;
+    private async markOUT(presence: RuntimePresence, reason: "AUTO_EXIT_TIMEOUT" | "SYSTEM_RECOVERY") {
         presence.state = "OUT";
-        presence.activeTrackIds.clear();
         presence.exitTimerId = null;
+        const exitTs = presence.lastSeenAt;
 
         const cameraCode = presence.exitCameraCode ?? presence.entryCameraCode ?? "unknown";
 
         await PresenceModel.findOneAndUpdate(
             { employeeId: presence.employeeId, state: "IN" },
             {
-                state: "OUT",
-                lastChangedAt: Date.now(),
-                lastGate: presence.lastGate,
-                lastCameraCode: cameraCode,
+                $set: {
+                    state: "OUT",
+                    lastChangedAt: exitTs,
+                    lastGate: "EXIT",
+                    lastCameraCode: cameraCode,
+                },
             }
         );
 
-        await this.presenceLogService.insertLog({
+        await this.logService.insertLog({
             employeeId: presence.employeeId,
             eventType: reason,
-            fromState: prevState,
+            fromState: "IN",
             toState: "OUT",
             cameraCode,
-            occurredAt: Date.now(),
-            source: reason === "EXIT_DETECTED" ? "face_recognition" : "system",
-            note: reason === "AUTO_EXIT_TIMEOUT" ? "No boundary activity within timeout" : undefined,
+            occurredAt: exitTs,
+            source: "system",
         });
 
         console.log(`[PRESENCE] ${presence.employeeId} → OUT (${reason})`);
     }
-
-
 }
