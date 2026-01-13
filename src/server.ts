@@ -9,10 +9,13 @@ import { initWSSStreaming, initCameraStatusSubscriber } from "./stream";
 import initCameraBBoxSubscriber from "./stream/initCameraBBoxSubscriber";
 import { initEventHandlers } from "./events/Event";
 import loadCameraConfigsToRedis from "./module/cameras/infrastructure/camera.cache";
+import { presenceController } from "./module/presence/presence.module";
+
 
 connectMongoDB();
 connectRedis();
 loadCameraConfigsToRedis()
+presenceController.recoverFromDBOnStartup();
 
 const app = express();
 const server = http.createServer(app);

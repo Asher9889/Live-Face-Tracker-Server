@@ -24,9 +24,11 @@ const attendanceSchema = new mongoose.Schema<AttendanceModel>({
     },
     exitAt: {
         type: Number,
+         required: false,
     },
     durationMs: {
         type: Number,
+         required: false,
     },
     entrySource: {
         type: String,
@@ -36,6 +38,7 @@ const attendanceSchema = new mongoose.Schema<AttendanceModel>({
     exitSource: {
         type: String,
         enum: EXIT_TYPE,
+        required: false,
     },
     date: {
         type: String, // YYYY-MM-DD (Most imp) // Strings are compared lexicographically (left → right).

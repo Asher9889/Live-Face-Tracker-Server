@@ -1,7 +1,3 @@
-import PresenceLogService from "./logs/presence-log.service";
-import PresenceService from "./presence.service";
+import presenceRoutes from "./presence.routes";
 
-const presenceService = new PresenceService(new PresenceLogService);
-presenceService.recoverFromDBOnStartup();
-
-export { presenceService };
+export default presenceRoutes;

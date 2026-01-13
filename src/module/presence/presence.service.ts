@@ -92,6 +92,10 @@ export default class PresenceService {
         this.scheduleExit(presence, timeout, "face_recognition");
     }
 
+    getAllPresence(){
+        return Array.from(this.presenceMap.values());
+    }
+
     private scheduleExit(presence: RuntimePresence, timeout: number, source: "system" | "face_recognition" | "manual") {
         if (presence.exitTimerId) {
             clearTimeout(presence.exitTimerId);

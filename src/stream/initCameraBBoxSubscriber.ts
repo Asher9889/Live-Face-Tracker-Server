@@ -1,6 +1,6 @@
 import { redisSub } from "../db";
 import { WS_EVENTS } from "../events";
-import { presenceService } from "../module/presence";
+import { presenceService } from "../module/presence/presence.module";
 import { wsServer } from "./initStream";
 import normalizeBBox from "./normalizeBBox";
 
