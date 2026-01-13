@@ -77,7 +77,7 @@ export class CameraController {
 
       "-f", "flv",
       rtmpUrl,
-    ]);
+    ], { windowsHide: true });
 
 
     // Initialize in-memory state
