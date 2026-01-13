@@ -1,11 +1,11 @@
 import mongoose, { Document, Schema } from "mongoose";
-import { EXIT_TYPE, ExitType } from "../../../domain/types";
+import { ExitType, PRESENCE_LOG_TYPE, PresenceLogType } from "../../../domain/types";
 
 
 export interface IPresenceLog extends Document {
   employeeId: string;
 
-  eventType: ExitType;
+  eventType: PresenceLogType;
 
   fromState?: "IN" | "OUT";
   toState?: "IN" | "OUT";
@@ -27,7 +27,7 @@ const PresenceLogSchema = new Schema<IPresenceLog>(
 
     eventType: {
       type: String,
-      enum: EXIT_TYPE,
+      enum: PRESENCE_LOG_TYPE,
       required: true,
     },
 
