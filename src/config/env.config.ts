@@ -63,7 +63,9 @@ const envConfig: IEnv = {
     // Duration parsing
     exitTimeoutAfterExitGate: parseDuration(process.env.EXIT_TIMEOUT_AFTER_EXIT_GATE as StringValue, "EXIT_TIMEOUT_AFTER_EXIT_GATE"),
     exitTimeoutAfterEntryGate: parseDuration(process.env.EXIT_TIMEOUT_AFTER_ENTRY_GATE as StringValue, "EXIT_TIMEOUT_AFTER_ENTRY_GATE"),
-    
+
+    // FFmpeg
+    ffmpegPath: process.env.FFMPEG_PATH || "ffmpeg",
 
 };
 

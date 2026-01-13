@@ -47,6 +47,9 @@ interface IEnv {
     // Duration parsing
     exitTimeoutAfterExitGate: number;
     exitTimeoutAfterEntryGate: number;
+    
+    // FFmpeg
+    ffmpegPath: string;
 }
 
 

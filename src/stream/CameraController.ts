@@ -27,7 +27,6 @@ export class CameraController {
     const ingress = await createCameraIngress(cameraId);
 
     const streamKey = ingress.streamKey;
-    console.log("Stream key is", streamKey)
     const rtmpUrl = `rtmp://livekit.mssplonline.in/live/${streamKey}`;
     console.log("RTMP url is", rtmpUrl)
     if (!streamKey || !rtmpUrl) {
@@ -65,7 +64,8 @@ export class CameraController {
     //   rtmpUrl,
     // ]);
 
-    const ffmpeg = spawn("ffmpeg", [
+    const ffmpegPath = envConfig.ffmpegPath;
+    const ffmpeg = spawn(ffmpegPath, [
       "-rtsp_transport", "tcp",
       "-i", rtspUrl,
 
