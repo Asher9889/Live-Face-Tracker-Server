@@ -1,5 +1,6 @@
 import mongoose, { Document, Schema } from "mongoose";
 import { ExitType, PRESENCE_LOG_TYPE, PresenceLogType } from "../../../domain/types";
+import { required } from "zod/mini";
 
 
 export interface IPresenceLog extends Document {
@@ -13,6 +14,7 @@ export interface IPresenceLog extends Document {
   cameraCode?: string;
 
   occurredAt: number;
+  date: string;
 
   source: "face_recognition" | "manual" | "system";
 
@@ -37,6 +39,8 @@ const PresenceLogSchema = new Schema<IPresenceLog>(
     cameraCode: { type: String },
 
     occurredAt: { type: Number, required: true, index: true },
+
+    date: { type: String, required: true, index: true },
 
     source: {
       type: String,

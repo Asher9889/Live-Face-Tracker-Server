@@ -20,3 +20,13 @@ export interface RuntimePresence {
     exitCameraCode?: string | undefined;
     exitTimerId?: NodeJS.Timeout | null;
 }
+
+// Inside to outside world.
+export type PresenceDTO = {
+  employeeId: string;
+  state: "IN" | "OUT";
+  lastSeenAt: number;
+  lastGate: "ENTRY" | "EXIT";
+  entryCameraCode?: string;
+  exitCameraCode?: string;
+};

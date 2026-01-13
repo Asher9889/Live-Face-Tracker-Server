@@ -11,6 +11,7 @@ type PresenceLogInput = {
 
   cameraCode?: string;
   occurredAt?: number;
+  date: string
 
   source?: "face_recognition" | "manual" | "system";
   confidence?: number;
@@ -29,6 +30,7 @@ class PresenceLogService {
       toState: input.toState,
       cameraCode: input.cameraCode,
       occurredAt,
+      date: input.date,
       source: input.source ?? "face_recognition",
       confidence: input.confidence,
       note: input.note,

@@ -1,9 +1,12 @@
 import PresenceModel from "./presence.model";
 import PresenceLogService from "./logs/presence-log.service";
-import { PresenceState, GateRole, RuntimePresence } from "./presence.types"; 
-import attendanceService from "../attendance/attendance.service";
+import { PresenceState, GateRole, RuntimePresence, PresenceDTO } from "./presence.types";
+import { attendanceService } from "../attendance";
 import { ExitType, PresenceLogType } from "../../domain/types";
 import { envConfig } from "../../config";
+import { DateTime } from "luxon";
+import { miliSecondsToISoDate } from "../../utils";
+
 export default class PresenceService {
     private presenceMap = new Map<string, RuntimePresence>();
 
@@ -92,8 +95,16 @@ export default class PresenceService {
         this.scheduleExit(presence, timeout, "face_recognition");
     }
 
-    getAllPresence(){
-        return Array.from(this.presenceMap.values());
+    getAllPresence() {
+        const allPresence = Array.from(this.presenceMap.values()).map(p => ({
+            employeeId: p.employeeId,
+            state: p.state,
+            lastSeenAt: p.lastSeenAt,
+            lastGate: p.lastGate,
+            entryCameraCode: p.entryCameraCode,
+            exitCameraCode: p.exitCameraCode,
+        }));
+        return allPresence;
     }
 
     private scheduleExit(presence: RuntimePresence, timeout: number, source: "system" | "face_recognition" | "manual") {
@@ -120,6 +131,7 @@ export default class PresenceService {
                     state: "IN",
                     lastSeenAt: eventTs,
                     lastChangedAt: eventTs,
+                    date: miliSecondsToISoDate(eventTs),
                     lastGate: "ENTRY",
                     lastCameraCode: cameraCode,
                 },
@@ -137,6 +149,7 @@ export default class PresenceService {
             toState: "IN",
             cameraCode,
             occurredAt: eventTs,
+            date: miliSecondsToISoDate(eventTs),
             source: "face_recognition",
             confidence,
         });
@@ -163,6 +176,7 @@ export default class PresenceService {
                 $set: {
                     state: "OUT",
                     lastChangedAt: exitTs,
+                    date: miliSecondsToISoDate(exitTs),
                     lastGate: "EXIT",
                     lastCameraCode: cameraCode,
                 },
@@ -176,6 +190,7 @@ export default class PresenceService {
             toState: "OUT",
             cameraCode,
             occurredAt: exitTs,
+            date: miliSecondsToISoDate(exitTs),
             source: source ?? "system",
         });
 
