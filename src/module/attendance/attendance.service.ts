@@ -35,7 +35,7 @@ class AttendanceService {
 
     async endSession(params: CloseSessionInput) {
         let { employeeId, exitAt, exitSource } = params;
-        const openSession = await AttendanceModel.findOne({ employeeId, exitAt: { $exists: false } }).lean();
+        const openSession = await AttendanceModel.findOne({ employeeId, exitAt: { $exists: false } });
         if (!openSession) {
             // it means none session is active
             return;
@@ -64,7 +64,7 @@ class AttendanceService {
     }
 
     private toAttendenceDate(ts: number) {
-        const date = luxon.DateTime.fromMillis(ts, { zone: "Asia/Kolkata" }).toFormat("YYYY-MM-DD");
+        const date = luxon.DateTime.fromMillis(ts, { zone: "Asia/Kolkata" }).toFormat("yyyy-MM-dd");
         return date;
     }
 }
