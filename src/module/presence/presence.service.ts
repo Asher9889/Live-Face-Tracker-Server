@@ -3,11 +3,12 @@ import PresenceLogService from "./logs/presence-log.service";
 import { PresenceState, GateRole, RuntimePresence } from "./presence.types"; 
 import attendanceService from "../attendance/attendance.service";
 import { ExitType, PresenceLogType } from "../../domain/types";
+import { envConfig } from "../../config";
 export default class PresenceService {
     private presenceMap = new Map<string, RuntimePresence>();
 
-    private readonly EXIT_TIMEOUT_AFTER_EXIT_GATE = 0; // 45 sec
-    private readonly EXIT_TIMEOUT_AFTER_ENTRY_GATE = 3 * 60 * 60 * 1000; // 3 hours
+    private readonly EXIT_TIMEOUT_AFTER_EXIT_GATE = envConfig.exitTimeoutAfterExitGate ?? (45 * 60 * 1000); // 45 sec
+    private readonly EXIT_TIMEOUT_AFTER_ENTRY_GATE = envConfig.exitTimeoutAfterEntryGate ?? (3 * 60 * 60 * 1000); // 3 hours
 
     constructor(private readonly logService: PresenceLogService) { }
 

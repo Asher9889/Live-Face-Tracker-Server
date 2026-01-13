@@ -43,6 +43,10 @@ interface IEnv {
     // Camera Status track
     watchdogInterval: number;
     offlineThreshold: number;
+    
+    // Duration parsing
+    exitTimeoutAfterExitGate: number;
+    exitTimeoutAfterEntryGate: number;
 }
 
 

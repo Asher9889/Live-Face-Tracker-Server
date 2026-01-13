@@ -1,5 +1,7 @@
 import dotenv from "dotenv";
 import { IEnv } from "../interfaces/env.interface";
+import parseDuration from "../utils/parseDuration";
+import { StringValue } from "ms";
 
 dotenv.config();
 
@@ -57,6 +59,10 @@ const envConfig: IEnv = {
     // Camera Status track
     watchdogInterval: Number(process.env.WATCHDOG_INTERVAL!!),
     offlineThreshold: Number(process.env.OFFLINE_THRESHOLD!!),
+
+    // Duration parsing
+    exitTimeoutAfterExitGate: parseDuration(process.env.EXIT_TIMEOUT_AFTER_EXIT_GATE as StringValue, "EXIT_TIMEOUT_AFTER_EXIT_GATE"),
+    exitTimeoutAfterEntryGate: parseDuration(process.env.EXIT_TIMEOUT_AFTER_ENTRY_GATE as StringValue, "EXIT_TIMEOUT_AFTER_ENTRY_GATE"),
     
 
 };
