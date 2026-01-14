@@ -78,6 +78,7 @@ export default class PresenceService {
         if (presence.state === "OUT" && gateRole === "ENTRY") {
             await this.markIN(presence, cameraCode, eventTs, confidence);
         } else {
+            console.log("[UPDATE] Updating presence of user ", presence.employeeId);
             await this.updateMarkIN(presence, cameraCode, eventTs, confidence)
         }
     }
@@ -116,7 +117,7 @@ export default class PresenceService {
         presence.exitTimerId = setTimeout(async () => {
             const idle = Date.now() - presence.lastSeenAt;
             if (presence.state === "IN" && presence.lastGate === "EXIT" && idle >= timeout) {
-                await this.markOUT(presence, "EXIT_CAMERA", source, confidence);
+                await this.markOUT(presence, "EXIT_DETECTED", source, confidence);
             }
         }, timeout);
     }
@@ -167,6 +168,7 @@ export default class PresenceService {
 
     private async updateMarkIN(presence: RuntimePresence, cameraCode: string, eventTs: number, confidence: number) {
         presence.state = "IN";
+        presence.lastSeenAt = eventTs;
 
         await PresenceModel.findOneAndUpdate(
             { employeeId: presence.employeeId },
@@ -184,7 +186,7 @@ export default class PresenceService {
         await this.logService.insertLog({
             employeeId: presence.employeeId,
             eventType: "FACE_DETECTED",
-            fromState: "OUT",
+            fromState: "IN",
             toState: "IN",
             cameraCode,
             occurredAt: eventTs,
@@ -192,7 +194,6 @@ export default class PresenceService {
             source: "face_recognition",
             confidence,
         });
-
     }
 
     private async markOUT(presence: RuntimePresence, reason: ExitType, source: "system" | "face_recognition" | "manual" = "system", confidence: number) {
