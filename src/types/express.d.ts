@@ -1,8 +1,8 @@
 import { Request } from "express";
-import { AttendenceQueryDTO } from "../module/attendance/attendance.types";
+import { AttendanceEventsQueryDTO, AttendenceQueryDTO } from "../module/attendance/attendance.types";
 
 export interface CustomRequest extends Request {
-  validatedQuery?: AttendenceQueryDTO;
+  validatedQuery?: AttendanceEventsQueryDTO;
   validatedBody?: unknown;
   validatedParams?: unknown;
 }

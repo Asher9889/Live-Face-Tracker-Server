@@ -10,6 +10,7 @@ interface IPresenceSchemaData extends Document {
   lastChangedAt: number;    // last time state changed (IN <-> OUT)
 
   date: string;
+  confidence: number;
 
   // Boundary context
   lastGate: GateRole;       // ENTRY or EXIT
@@ -25,6 +26,7 @@ const PresenceSchema = new mongoose.Schema<IPresenceSchemaData>({
   lastChangedAt: { type: Number, required: true, index: true },
 
   date: {type: String, required: true, index: true},
+  confidence: {type: Number, required: true},
 
   lastGate: { type: String, enum: Object.values(GATE_ROLE), required: true },
   lastCameraCode: { type: String, required: true, index: true },

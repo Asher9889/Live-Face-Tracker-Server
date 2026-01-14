@@ -8,6 +8,8 @@ interface AttendanceModel extends Document {
     durationMs: number;
     entrySource: EntryType;
     exitSource: ExitType;
+    entryConfidence: number;
+    exitConfidence: number
     date: string;
 }
 
@@ -17,6 +19,14 @@ const attendanceSchema = new mongoose.Schema<AttendanceModel>({
         required: true,
         index: true
     },
+    entryConfidence: {
+        type: Number,
+        required: true
+    },
+    exitConfidence: {
+        type: Number,
+    },
+
     entryAt: {
         type: Number,
         required: true,

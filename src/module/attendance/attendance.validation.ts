@@ -1,5 +1,6 @@
 import { DateTime } from "luxon";
 import z from "zod";
+import { todayDate } from "../../utils";
 
 const parseCSVEnum = (allowed: string[]) =>
     z.string()
@@ -9,7 +10,8 @@ const parseCSVEnum = (allowed: string[]) =>
                 .filter(x => allowed.includes(x))
         );
 
-const now = DateTime.now().setZone("Asia/Kolkata").toISODate()!
+const now = todayDate();
+
 export const attendanceEventsQuerySchema = z.object({
     limit: z.coerce.number().min(1).max(100).default(20),
     cursor: z.coerce.number().optional(),
