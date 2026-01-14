@@ -11,7 +11,6 @@ import { initEventHandlers } from "./events/Event";
 import loadCameraConfigsToRedis from "./module/cameras/infrastructure/camera.cache";
 import { presenceController } from "./module/presence/presence.module";
 
-
 connectMongoDB();
 connectRedis();
 loadCameraConfigsToRedis()

@@ -3,7 +3,7 @@ import { ApiError } from "../utils";
 import { StatusCodes } from "http-status-codes";
 
 // export const mongoUrl = `mongodb://${envConfig.mongoUser}:${envConfig.mongoPassword}@${envConfig.mongoHost}:${envConfig.mongoPort}/${envConfig.dbName}?authSource=${envConfig.mongoAuthSource}`;
-export const mongoUrl = "mongodb://160.25.62.109:8109/faceTracker_db"
+export const mongoUrl = "mongodb://160.25.62.109:8109/faceTracker_dev_db";
 
 async function connectMongoDB(): Promise<Connection | undefined> {
     try {

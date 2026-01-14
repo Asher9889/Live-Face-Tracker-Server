@@ -1,5 +1,5 @@
 export type AttendenceQueryDTO = {
-    page?: string;
+    cursor?: string;
     limit?: string;
     from?: string;
     to?: string;

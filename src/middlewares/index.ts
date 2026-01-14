@@ -1,4 +1,4 @@
-import { validate } from "./validate.middleware";
+import { validate, validateQuery } from "./validate.middleware";
 
 
-export { validate }
+export { validate, validateQuery }

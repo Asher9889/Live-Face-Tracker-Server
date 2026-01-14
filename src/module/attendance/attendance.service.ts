@@ -3,6 +3,7 @@ import * as luxon from 'luxon';
 import { EntryType, ExitType } from "../../domain/types";
 import PresenceModel from "../presence/presence.model";
 import { DateTime } from "luxon";
+import { AttendenceQueryDTO } from "./attendance.types";
 
 type StartSessionInput = {
     employeeId: String;
@@ -18,7 +19,8 @@ type CloseSessionInput = {
 
 export default class AttendanceService {
 
-    async getAttendanceEvents(){
+    async getAttendanceEvents(filter:AttendenceQueryDTO){
+        
         const attendanceEvents = await PresenceModel.find().lean();
         return attendanceEvents;
     }
