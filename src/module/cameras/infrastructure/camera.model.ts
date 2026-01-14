@@ -6,7 +6,7 @@ const CameraSchema = new Schema<Camera & Document>(
   {
     name: { type: String, required: true },
 
-    code: { type: String, required: true, unique: true },
+    code: { type: String, required: true},
 
     gateType: {
       type: String,

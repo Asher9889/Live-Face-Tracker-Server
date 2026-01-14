@@ -5,7 +5,7 @@ import PresenceModel from "../presence/presence.model";
 import { DateTime } from "luxon";
 import { AttendanceEventsQueryDTO, AttendenceQueryDTO } from "./attendance.types";
 import { todayDate } from "../../utils";
-import { stat } from "fs";
+import { pipeline } from "stream";
 
 type StartSessionInput = {
     employeeId: String;
@@ -26,111 +26,25 @@ export default class AttendanceService {
     async getAttendanceEvents(filter: AttendanceEventsQueryDTO) {
         const { from, to, status, type, cursor, limit } = filter;
 
-        const today = todayDate(); // "YYYY-MM-DD"
+        // const today = todayDate(); // "YYYY-MM-DD"
+        const today = "2026-01-14"; // "YYYY-MM-DD"
         const isTodayOnly = from === today && to === today;
-        const includesToday = to >= today;
-        const includesPast = from < today;
+        const isPastOnly = to < today;
 
         let records: any[] = [];
 
         if (isTodayOnly) {
-            const filter = this.buildTodayQueryFilter({ from, to, status, type, cursor, limit }); 
-            const data = await PresenceModel.find(filter).sort({lastChangedAt : -1}).limit(limit + 1).lean();
+            console.log("request reached")
+            const aggregationPipeline = this.buildTodayPresencePipeline({ from, to, status, type, cursor, limit });
+            const data = await PresenceModel.aggregate(aggregationPipeline);
+            console.log("data is", data)
             records = data;
         }
 
-        const buildPresenceFilter = () => {
-            const q: Record<string, any> = {
-                date: today,
-            };
-
-            if (type.length === 1) {
-                q.lastGate = { $in: type };
-            }
-
-            if (status.length === 1) {
-                if (status[0] === "VERIFIED") {
-                    q.employeeId = { $exists: true, $ne: null };
-                } else {
-                    q.$or = [{ employeeId: { $exists: false } }, { employeeId: null }];
-                }
-            }
-
-            if (cursor) {
-                q.lastChangedAt = { $lt: cursor };
-            }
-
-            return q;
-        };
-
-        const buildAttendanceFilter = () => {
-            const q: Record<string, any> = {
-                date: { $gte: from, $lte: to },
-            };
-
-            if (type.length === 1) {
-                q.exitSource = { $in: type };
-            }
-
-            if (status.length === 1) {
-                q.employeeId =
-                    status[0] === "VERIFIED"
-                        ? { $exists: true }
-                        : { $exists: false };
-            }
-
-            if (cursor) {
-                q.exitAt = { $lt: cursor };
-            }
-
-            return q;
-        };
-
-        // let queryFilter: Record<string, any> = {
-        //     date: { $gte: from, $lte: to },
-        //     lastGate: { $in: type },
-        // }
-
-        // if (status.length === 1) {
-        //     if (status[0] === "VERIFIED") {
-        //         queryFilter.employeeId = { $exists: true, $ne: null };
-        //     }
-        //     if (status[0] === "UNKNOWN") {
-        //         queryFilter.$or = [{ employeeId: { $exists: false } }, { employeeId: null }];
-        //     }
-        // }
-
-        // if (cursor) {
-        //     queryFilter.lastChangedAt = { $lt: cursor };
-        // }
-
-        // if (from === todayDate()) {
-        //     records = await PresenceModel.find(queryFilter).sort({ lastChangedAt: -1 }).limit(limit + 1).lean();
-        // }
-
-        // // 1️⃣ TODAY → Presence
-        // if (isTodayOnly || includesToday) {
-        //     const presenceRecords = await PresenceModel.find(buildPresenceFilter()).sort({ lastChangedAt: -1 })
-        //         .limit(limit + 1).lean();
-
-        //     records.push(...presenceRecords);
-        // }
-
-        // // 2️⃣ PAST → Attendance
-        // if (includesPast) {
-        //     const attendanceRecords = await AttendanceModel.find(buildAttendanceFilter())
-        //         .sort({ exitAt: -1 })
-        //         .limit(limit + 1)
-        //         .lean();
-
-        //     records.push(...attendanceRecords);
-        // }
-
-        // records.sort((a, b) => {
-        //     const ta = a.lastChangedAt ?? a.exitAt;
-        //     const tb = b.lastChangedAt ?? b.exitAt;
-        //     return tb - ta;
-        // });
+        if(isPastOnly) {
+            // TODO: fetch from attendance model
+            
+        }
 
         const hasMore = records.length > limit;
 
@@ -220,4 +134,98 @@ export default class AttendanceService {
 
         return queryFilter;
     }
+
+    private buildTodayPresencePipeline(filter: AttendanceEventsQueryDTO) {
+        const { status, type, cursor, limit, from } = filter;
+        const pipeline: any[] = [];
+
+        pipeline.push({
+            $match: {
+                date: todayDate(),
+            }
+        });
+
+        if (cursor) {
+            pipeline.push({
+                $match: {
+                    lastChangedAt: { $lt: cursor }
+                }
+            });
+        }
+
+        if (type.length > 0) {
+            pipeline.push({
+                $match: {
+                    lastGate: { $in: type }
+                }
+            });
+        }
+
+        if (status.length === 1) {
+            if (status[0] === "VERIFIED") {
+                pipeline.push({
+                    $match: {
+                        employeeId: { $exists: true, $ne: null }
+                    }
+                });
+            }
+            if (status[0] === "UNKNOWN") {
+                pipeline.push({
+                    $match: {
+                        $or: [{ employeeId: { $exists: false } }, { employeeId: null }]
+                    }
+                });
+            }
+        }
+
+        pipeline.push({
+            $lookup: {
+                from: "employees",
+                localField: "employeeId",
+                foreignField: "id",
+                as: "employee"
+            }
+        })
+
+        pipeline.push({
+            $unwind: {
+                path: "$employee",
+                preserveNullAndEmptyArrays: true
+            }
+        })
+
+        pipeline.push({
+            $project: {
+                _id: 0,
+                id: { $toString: "$_id" },
+                employeeId: 1,
+                employeeName: { $ifNull: ["$employee.name", "Unknown Person"] },
+                employeeAvatar: { $arrayElemAt: ["$employee.faceImages", 0] },
+                lastGate: 1,
+                lastCameraCode: 1,
+                lastChangedAt: 1,
+                lastSeenAt: 1,
+                date: 1,
+                status: {
+                    $cond: [{ $ifNull: ["$employeeId", false] }, "VERIFIED", "UNKNOWN"]
+                },
+                confidence: { $ifNull: ["$confidence", 0] },
+                source: "FACE_AI"
+            }
+        });
+
+        pipeline.push({
+            $addFields: {
+                isLate: false,
+                isEarlyExit: false
+            }
+        });
+
+        pipeline.push(
+            { $sort: { lastChangedAt: -1 } },
+            { $limit: limit + 1 }
+        );
+        return pipeline;
+    }
+
 }

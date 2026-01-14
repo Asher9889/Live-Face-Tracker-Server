@@ -18,12 +18,12 @@ interface IPresenceSchemaData extends Document {
 }
 
 
-const PresenceSchema = new mongoose.Schema<IPresenceSchemaData>({
+const presenceSchema = new mongoose.Schema<IPresenceSchemaData>({
   employeeId: { type: String, required: true },
   state: { type: String, enum: Object.values(PRESENCE_STATE) , required: true },
 
-  lastSeenAt: { type: Number, required: true, index: true },
-  lastChangedAt: { type: Number, required: true, index: true },
+  lastSeenAt: { type: Number, required: true},
+  lastChangedAt: { type: Number, required: true},
 
   date: {type: String, required: true, index: true},
   confidence: {type: Number, required: true},
@@ -32,6 +32,10 @@ const PresenceSchema = new mongoose.Schema<IPresenceSchemaData>({
   lastCameraCode: { type: String, required: true, index: true },
 }, { versionKey: false , timestamps: true });
 
-const PresenceModel = mongoose.model("employees_presence", PresenceSchema, "employees_presence");
+presenceSchema.index({ date: 1, lastChangedAt: -1 });
+presenceSchema.index({ employeeId: 1 });
+
+
+const PresenceModel = mongoose.model("employees_presence", presenceSchema, "employees_presence");
 
 export default PresenceModel;
