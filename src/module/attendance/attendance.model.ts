@@ -54,12 +54,12 @@ const attendanceSchema = new mongoose.Schema<AttendanceModel>({
     },
     entryCameraCode: {
         type: String,
-        required: true,
+     //   required: true,
     },
 
     exitCameraCode: {
         type: String,
-        required: false,
+    //    required: false,
     },
     date: {
         type: String, // YYYY-MM-DD (Most imp) // Strings are compared lexicographically (left → right).

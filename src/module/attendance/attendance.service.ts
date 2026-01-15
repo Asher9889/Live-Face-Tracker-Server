@@ -3,9 +3,11 @@ import * as luxon from 'luxon';
 import { EntryType, ExitType } from "../../domain/types";
 import PresenceModel from "../presence/presence.model";
 import { DateTime } from "luxon";
-import { AttendanceEventsQueryDTO, AttendenceQueryDTO } from "./attendance.types";
+import { AttendanceEventDTO, AttendanceEventsQueryDTO, AttendenceQueryDTO } from "./attendance.types";
 import { todayDate } from "../../utils";
-import { pipeline } from "stream";
+import { ObjectId } from "mongodb";
+import { PipelineStage } from "mongoose";
+import { envConfig } from "../../config";
 
 type StartSessionInput = {
     employeeId: String;
@@ -31,22 +33,22 @@ export default class AttendanceService {
         const today = todayDate(); // "YYYY-MM-DD"
         // const today = "2026-01-14"; // "YYYY-MM-DD"
         const isTodayOnly = from === today && to === today;
-        const isPastOnly = to < today;
-        // const isPastOnly = false;
+        // const isTodayOnly = true
+        // const isPastOnly = to < today;
+        const isPastOnly = false;
 
         let records: any[] = [];
 
         if (isTodayOnly) {
-            console.log("request reached")
-            const aggregationPipeline = this.buildTodayPresencePipeline({ from, to, status, type, cursor, limit });
+            const aggregationPipeline = this.buildTodayPresencePipeline({ from: today, to: today, status, type, cursor, limit });
             const data = await PresenceModel.aggregate(aggregationPipeline);
 
             records = data;
         }
 
-        if(isPastOnly) {
-            
-            
+        if (isPastOnly) {
+
+
 
         }
         const hasMore = records.length > limit;
@@ -56,6 +58,12 @@ export default class AttendanceService {
         // const nextCursor = data.length > 0 ? data[data.length - 1].lastChangedAt ?? data[data.length - 1].exitAt : null;
 
         return { attendanceEvents: data, nextCursor, hasMore };
+    }
+
+    async getEmployeeTodayAttendanceSession(employeeId: string) {
+        const pipeline = this.getEmployeeTodayAttendanceSessionPipeline(employeeId);
+        const sessions = await AttendanceModel.aggregate(pipeline);
+        return sessions;
     }
 
     async openSession(params: StartSessionInput) {
@@ -146,7 +154,7 @@ export default class AttendanceService {
 
         pipeline.push({
             $match: {
-                date: "2026-01-14",
+                date: from,
             }
         });
 
@@ -243,18 +251,205 @@ export default class AttendanceService {
             }
         });
 
-        pipeline.push({
-            $match : {
-                exitSource: { $in: ["FACE_AI", "FACE_AI_GATE"] }
+        if (type.length === 1) {
+            if (type[0] === "EXIT") {
+                pipeline.push({
+                    $match: { exitAt: { $exists: true } }
+                });
             }
-        })
+            // ENTRY = default, no extra filter
+        }
 
-        if(cursor){
+        if (cursor) {
+            pipeline.push({
+                $match: { exitAt: { $lt: cursor } }
+            });
+        }
+
+        if (status.length === 1) {
+            if (status[0] === "VERIFIED") {
+                pipeline.push({
+                    $match: {
+                        employeeId: { $exists: true, $ne: null }
+                    }
+                });
+            }
+            if (status[0] === "UNKNOWN") {
+                pipeline.push({
+                    $match: {
+                        $or: [{ employeeId: { $exists: false } }, { employeeId: null }]
+                    }
+                });
+            }
+
+            pipeline.push({
+                $lookup: {
+                    from: "employees",
+                    localField: "employeeId",
+                    foreignField: "id",
+                    as: "employee"
+                }
+            });
+
+            pipeline.push({
+                $unwind: {
+                    path: "$employee",
+                    preserveNullAndEmptyArrays: true
+                }
+            });
+
+            pipeline.push({
+                $project: {
+                    _id: 0,
+                    id: { $toString: "$_id" },
+
+                    employeeId: 1,
+                    employeeName: { $ifNull: ["$employee.name", "Unknown Person"] },
+                    employeeAvatar: { $arrayElemAt: ["$employee.faceImages", 0] },
+
+                    timestamp: { $toDate: "$exitAt" },
+                    type: "EXIT",
+                    gate: "$exitCameraCode",
+
+                    status: {
+                        $cond: [
+                            { $ifNull: ["$employeeId", false] },
+                            "VERIFIED",
+                            "UNKNOWN"
+                        ]
+                    },
+
+                    confidence: { $ifNull: ["$exitConfidence", 0] },
+                    source: "$exitSource",
+
+                    isLate: false,
+                    isEarlyExit: false,
+                }
+            });
+
 
         }
 
         return pipeline;
     }
+
+    private getEmployeeTodayAttendanceSessionPipeline(employeeId: string): PipelineStage[] {
+        const pipeline: PipelineStage[] = [];
+
+        pipeline.push({
+            $match: {
+                date: "2026-01-15",
+                employeeId: new ObjectId(employeeId),
+            },
+        });
+
+        pipeline.push({
+            $lookup: {
+                from: "employees",
+                localField: "employeeId",
+                foreignField: "_id",
+                as: "employee",
+            },
+        });
+
+        pipeline.push({
+            $unwind: {
+                path: "$employee",
+                preserveNullAndEmptyArrays: false,
+            },
+        });
+
+        pipeline.push({
+            $sort: {
+                entryAt: 1,
+            },
+        });
+
+        pipeline.push({
+            $group: {
+                _id: "$employeeId",
+                employee: {
+                    $first: {
+                        id: "$employee._id",
+                        name: "$employee.name",
+                        avatar: { $arrayElemAt: ["$employee.faceImages", 0] },
+                        department: "$employee.department",
+                        role: "$employee.role",
+                    },
+                },
+                date: { $first: "$date" },
+                firstEntry: { $first: "$entryAt" },
+                lastExit: { $last: "$exitAt" },
+                totalDurationMs: { $sum: "$durationMs" },
+                sessions: {
+                    $push: {
+                        entryAt: "$entryAt",
+                        exitAt: "$exitAt",
+                        entryConfidence: "$entryConfidence",
+                        exitConfidence: "$exitConfidence",
+                        entryCameraCode: "$entryCameraCode",
+                        exitCameraCode: "$exitCameraCode",
+                        entrySource: "$entrySource",
+                        exitSource: "$exitSource",
+                        durationMs: "$durationMs",
+                    },
+                },
+            },
+        });
+
+        pipeline.push({
+            $project: {
+                _id: 0,
+                employee: 1,
+                date: 1,
+                firstEntry: 1,
+                lastExit: 1,
+
+                totalDurationMinutes: {
+                    $divide: ["$totalDurationMs", 60000],
+                },
+
+                breakDurationMinutes: {
+                    $divide: [
+                        {
+                            $subtract: [
+                                { $subtract: ["$lastExit", "$firstEntry"] },
+                                "$totalDurationMs",
+                            ],
+                        },
+                        60000,
+                    ],
+                },
+
+                status: {
+                    $cond: [
+                        { $gt: ["$lastExit", null] },
+                        "COMPLETED",
+                        "ONGOING",
+                    ],
+                },
+
+
+                flags: {
+                    $setUnion: [
+                        {
+                            $cond: [
+                                { $gt: ["$firstEntry", envConfig.officeStartTime] },
+                                ["LATE_ENTRY"],
+                                [],
+                            ],
+                        },
+                    ],
+                },
+                sessions: 1,
+            },
+        });
+
+        return pipeline;
+    }
+
+
+
 
 }
 

@@ -2,9 +2,9 @@ import dotenv from "dotenv";
 import { IEnv } from "../interfaces/env.interface";
 import parseDuration from "../utils/parseDuration";
 import { StringValue } from "ms";
+import { officeTimeToMs } from "../utils/miliSecondsToISoDate";
 
 dotenv.config();
-
 
 const envConfig: IEnv = {
     port: Number(process.env.PORT),
@@ -68,6 +68,9 @@ const envConfig: IEnv = {
 
     // FFmpeg
     ffmpegPath: process.env.FFMPEG_PATH || "ffmpeg",
+
+    officeStartTime: officeTimeToMs(process.env.OFFICE_START_TIME!, "OFFICE_START_TIME"),
+    officeEndTime: officeTimeToMs(process.env.OFFICE_END_TIME!, "OFFICE_END_TIME"),
 
 };
 

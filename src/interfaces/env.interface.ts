@@ -50,6 +50,10 @@ interface IEnv {
     
     // FFmpeg
     ffmpegPath: string;
+    
+    // Office time
+    officeStartTime: number;
+    officeEndTime: number;
 }
 
 

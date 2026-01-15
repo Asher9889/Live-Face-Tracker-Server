@@ -19,4 +19,14 @@ export default class AttendanceController {
         }
     }
 
+    getEmployeeTodayAttendanceSession = async (req: CustomRequest, res: Response): Promise<Response> => {
+        try {
+            const { employeeId } = req.params;
+            if (!employeeId) throw new ApiError(StatusCodes.BAD_REQUEST, "Employee ID is required", [{ field: "employeeId", message: "Employee ID is required" }]);
+            const data = await attendanceService.getEmployeeTodayAttendanceSession(employeeId);
+            return ApiResponse.success(res, "Employee's today attendance fetched successfully", data, StatusCodes.OK)
+        } catch (error) {
+            throw error;
+        }
+    }
 }
