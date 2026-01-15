@@ -11,6 +11,7 @@ type StartSessionInput = {
     employeeId: String;
     entryAt: number;
     entrySource: EntryType;
+    entryCameraCode: string;
     entryConfidence: number;
 }
 
@@ -18,6 +19,7 @@ type CloseSessionInput = {
     employeeId: String;
     exitAt: number;
     exitSource: ExitType;
+    exitCameraCode: string;
     exitConfidence: number
 }
 
@@ -26,10 +28,11 @@ export default class AttendanceService {
     async getAttendanceEvents(filter: AttendanceEventsQueryDTO) {
         const { from, to, status, type, cursor, limit } = filter;
 
-        // const today = todayDate(); // "YYYY-MM-DD"
-        const today = "2026-01-14"; // "YYYY-MM-DD"
+        const today = todayDate(); // "YYYY-MM-DD"
+        // const today = "2026-01-14"; // "YYYY-MM-DD"
         const isTodayOnly = from === today && to === today;
         const isPastOnly = to < today;
+        // const isPastOnly = false;
 
         let records: any[] = [];
 
@@ -42,10 +45,10 @@ export default class AttendanceService {
         }
 
         if(isPastOnly) {
-            // TODO: fetch from attendance model
             
-        }
+            
 
+        }
         const hasMore = records.length > limit;
 
         const data = hasMore ? records.slice(0, limit) : records;
@@ -56,7 +59,7 @@ export default class AttendanceService {
     }
 
     async openSession(params: StartSessionInput) {
-        const { employeeId, entryAt, entrySource, entryConfidence } = params;
+        const { employeeId, entryAt, entrySource, entryConfidence, entryCameraCode } = params;
         const oneSession = await AttendanceModel.findOne({ employeeId, exitAt: { $exists: false } }).lean();
         if (oneSession) {
             // it means one session is already active
@@ -69,13 +72,14 @@ export default class AttendanceService {
             entryAt,
             entrySource,
             date: this.toAttendenceDate(entryAt),
-            entryConfidence
+            entryConfidence,
+            entryCameraCode,
         });
         await newSession.save();
     }
 
     async endSession(params: CloseSessionInput) {
-        let { employeeId, exitAt, exitSource } = params;
+        let { employeeId, exitAt, exitSource, exitCameraCode } = params;
         const openSession = await AttendanceModel.findOne({ employeeId, exitAt: { $exists: false } });
         if (!openSession) {
             // it means none session is active
@@ -90,6 +94,7 @@ export default class AttendanceService {
 
         openSession.exitAt = exitAt;
         openSession.exitSource = exitSource;
+        openSession.exitCameraCode = exitCameraCode;
         openSession.durationMs = durationMs;
 
         await openSession.save();
@@ -141,7 +146,7 @@ export default class AttendanceService {
 
         pipeline.push({
             $match: {
-                date: todayDate(),
+                date: "2026-01-14",
             }
         });
 
@@ -228,4 +233,29 @@ export default class AttendanceService {
         return pipeline;
     }
 
+    private buildPastPipeline(filter: AttendanceEventsQueryDTO) {
+        const { status, type, cursor, limit, from, to } = filter;
+        const pipeline: any[] = [];
+
+        pipeline.push({
+            $match: {
+                date: { $gte: from, $lte: to }
+            }
+        });
+
+        pipeline.push({
+            $match : {
+                exitSource: { $in: ["FACE_AI", "FACE_AI_GATE"] }
+            }
+        })
+
+        if(cursor){
+
+        }
+
+        return pipeline;
+    }
+
 }
+
+

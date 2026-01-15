@@ -8,6 +8,8 @@ interface AttendanceModel extends Document {
     durationMs: number;
     entrySource: EntryType;
     exitSource: ExitType;
+    entryCameraCode: string;
+    exitCameraCode: string;
     entryConfidence: number;
     exitConfidence: number
     date: string;
@@ -34,11 +36,11 @@ const attendanceSchema = new mongoose.Schema<AttendanceModel>({
     },
     exitAt: {
         type: Number,
-         required: false,
+        required: false,
     },
     durationMs: {
         type: Number,
-         required: false,
+        required: false,
     },
     entrySource: {
         type: String,
@@ -48,6 +50,15 @@ const attendanceSchema = new mongoose.Schema<AttendanceModel>({
     exitSource: {
         type: String,
         enum: EXIT_TYPE,
+        required: false,
+    },
+    entryCameraCode: {
+        type: String,
+        required: true,
+    },
+
+    exitCameraCode: {
+        type: String,
         required: false,
     },
     date: {

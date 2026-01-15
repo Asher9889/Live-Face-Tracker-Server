@@ -65,8 +65,12 @@ export default class CameraController {
     }
 
     async getAllCamerasStatus(req: Request, res: Response, next: NextFunction){
-        const cameras = await this.cameraService.getAllCamerasStatus();
-        return ApiResponse.success(res, "Cameras fetched successfully", cameras, StatusCodes.OK)
+       try {
+         const cameras = await this.cameraService.getAllCamerasStatus();
+         return ApiResponse.success(res, "Cameras fetched successfully", cameras, StatusCodes.OK)
+       } catch (error) {
+            throw error;
+       }
     }
 
 }

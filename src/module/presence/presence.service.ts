@@ -72,13 +72,14 @@ export default class PresenceService {
         if (presence.exitTimerId) {
             clearTimeout(presence.exitTimerId);
             presence.exitTimerId = null;
+            console.log("[UPDATE] Cancelled pending exit timer for user ", presence.employeeId);
+
         }
 
         // ENTRY → start session
         if (presence.state === "OUT" && gateRole === "ENTRY") {
             await this.markIN(presence, cameraCode, eventTs, confidence);
         } else {
-            console.log("[UPDATE] Updating presence of user ", presence.employeeId);
             await this.updateMarkIN(presence, cameraCode, eventTs, confidence)
         }
     }
@@ -160,6 +161,7 @@ export default class PresenceService {
             employeeId: presence.employeeId,
             entryAt: eventTs,
             entrySource: "ENTRY_CAMERA",
+            entryCameraCode: cameraCode,
             entryConfidence: confidence
         });
 
@@ -169,7 +171,14 @@ export default class PresenceService {
     private async updateMarkIN(presence: RuntimePresence, cameraCode: string, eventTs: number, confidence: number) {
         presence.state = "IN";
         presence.lastSeenAt = eventTs;
-
+        console.log("[UPDATE] Updating presence of user ", presence.employeeId);
+        if (presence.exitTimerId) {
+            clearTimeout(presence.exitTimerId);
+            presence.exitTimerId = null;
+        }
+        const timeout = presence.lastGate === "EXIT" ? this.EXIT_TIMEOUT_AFTER_EXIT_GATE : this.EXIT_TIMEOUT_AFTER_ENTRY_GATE;
+        const remaining = timeout - (Date.now() - presence.lastSeenAt);
+        this.scheduleExit(presence, remaining, "system", 0);
         await PresenceModel.findOneAndUpdate(
             { employeeId: presence.employeeId },
             {
@@ -232,7 +241,8 @@ export default class PresenceService {
             employeeId: presence.employeeId,
             exitAt: exitTs,
             exitSource: reason,
-            exitConfidence: confidence
+            exitConfidence: confidence,
+            exitCameraCode: cameraCode,
         });
 
         console.log(`[PRESENCE] ${presence.employeeId} → OUT (${reason})`);
