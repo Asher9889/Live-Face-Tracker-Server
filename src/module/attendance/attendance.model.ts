@@ -23,7 +23,7 @@ const attendanceSchema = new mongoose.Schema<AttendanceModel>({
     },
     entryConfidence: {
         type: Number,
-        required: true
+        required: false
     },
     exitConfidence: {
         type: Number,
