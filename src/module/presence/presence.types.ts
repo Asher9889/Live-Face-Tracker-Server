@@ -16,8 +16,8 @@ export interface RuntimePresence {
     state: PresenceState;
     lastSeenAt: number;
     lastGate: GateRole;
-    entryCameraCode?: string | undefined;
-    exitCameraCode?: string | undefined;
+    entryCameraCode: string;
+    exitCameraCode?: string;
     exitTimerId?: NodeJS.Timeout | null;
 }
 

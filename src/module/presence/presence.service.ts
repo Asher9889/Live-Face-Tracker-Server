@@ -25,8 +25,8 @@ export default class PresenceService {
                 state: record.state, // "IN" or "OUT"
                 lastSeenAt: record.lastSeenAt,
                 lastGate: record.lastGate,
-                entryCameraCode: record.lastGate === "ENTRY" ? record.lastCameraCode : undefined,
-                exitCameraCode: record.lastGate === "EXIT" ? record.lastCameraCode : undefined,
+                entryCameraCode: record.lastGate === "ENTRY" ? record.lastCameraCode : "",
+                exitCameraCode: record.lastGate === "EXIT" ? record.lastCameraCode : "",
                 exitTimerId: null,
             };
             this.presenceMap.set(record.employeeId, presence);
@@ -54,6 +54,7 @@ export default class PresenceService {
                 state: "OUT",
                 lastSeenAt: eventTs,
                 lastGate: gateRole,
+                entryCameraCode: cameraCode,
             };
             this.presenceMap.set(employeeId, presence);
         }
@@ -88,7 +89,10 @@ export default class PresenceService {
         const { employeeId, cameraCode, eventTs, confidence } = params;
 
         const presence = this.presenceMap.get(employeeId);
-        if (!presence || presence.state === "OUT") return;
+        if (!presence || presence.state === "OUT") {
+            console.log("[INFO] Returning due to person already out or not present.", employeeId)
+            return;
+        };
 
         presence.lastSeenAt = eventTs;
         presence.lastGate = "EXIT";
@@ -210,7 +214,7 @@ export default class PresenceService {
         presence.exitTimerId = null;
         const exitTs = presence.lastSeenAt;
 
-        const cameraCode = presence.exitCameraCode ?? presence.entryCameraCode ?? "unknown";
+        const cameraCode = presence.exitCameraCode ?? "unknown";
 
         await PresenceModel.findOneAndUpdate(
             { employeeId: presence.employeeId, state: "IN" },

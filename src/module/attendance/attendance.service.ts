@@ -40,7 +40,7 @@ export default class AttendanceService {
             console.log("request reached")
             const aggregationPipeline = this.buildTodayPresencePipeline({ from, to, status, type, cursor, limit });
             const data = await PresenceModel.aggregate(aggregationPipeline);
-            console.log("data is", data)
+
             records = data;
         }
 
