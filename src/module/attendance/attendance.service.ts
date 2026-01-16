@@ -25,13 +25,50 @@ type CloseSessionInput = {
     exitConfidence: number
 }
 
+// internal, NOT exported to frontend
+interface TodayAttendanceSessionAggResult {
+    employee: {
+        id: string;
+        name: string;
+        avatar?: string;
+        department: string;
+        role: string;
+        email?: string;
+    };
+
+    date: string;
+
+    firstEntry?: number;
+    lastExit?: number;
+
+    totalDurationMinutes?: number;
+    breakDurationMinutes?: number;
+
+    status: "COMPLETED" | "ONGOING";
+
+    flags: string[];
+
+    sessions: Array<{
+        entryAt: number;
+        exitAt?: number;
+        entryConfidence?: number;
+        exitConfidence?: number;
+        entryCameraCode?: string;
+        exitCameraCode?: string;
+        entrySource: string;
+        exitSource?: string;
+        durationMs?: number;
+    }>;
+}
+
+
 export default class AttendanceService {
 
     async getAttendanceEvents(filter: AttendanceEventsQueryDTO) {
         const { from, to, status, type, cursor, limit } = filter;
 
         const today = todayDate(); // "YYYY-MM-DD"
-        // const today = "2026-01-14"; // "YYYY-MM-DD"
+        // const today = "2026-01-15"; // "YYYY-MM-DD"
         const isTodayOnly = from === today && to === today;
         // const isTodayOnly = true
         // const isPastOnly = to < today;
@@ -42,7 +79,6 @@ export default class AttendanceService {
         if (isTodayOnly) {
             const aggregationPipeline = this.buildTodayPresencePipeline({ from: today, to: today, status, type, cursor, limit });
             const data = await PresenceModel.aggregate(aggregationPipeline);
-
             records = data;
         }
 
@@ -62,8 +98,18 @@ export default class AttendanceService {
 
     async getEmployeeTodayAttendanceSession(employeeId: string) {
         const pipeline = this.getEmployeeTodayAttendanceSessionPipeline(employeeId);
-        const sessions = await AttendanceModel.aggregate(pipeline);
-        return sessions;
+        const raw = await AttendanceModel.aggregate<TodayAttendanceSessionAggResult>(pipeline);
+        const session = raw[0];
+
+        if (session?.status === "ONGOING") {
+            const now = Date.now();
+            const openSession = session.sessions.find((s) => !s.exitAt);
+            if (!openSession) return;
+
+            const liveMinutes = Number(((now - openSession.entryAt) / 60000).toFixed(1));
+            session.totalDurationMinutes = (session.totalDurationMinutes ?? 0) + liveMinutes;
+        }
+        return session;
     }
 
     async openSession(params: StartSessionInput) {
@@ -338,7 +384,7 @@ export default class AttendanceService {
 
         pipeline.push({
             $match: {
-                date: "2026-01-15",
+                date: todayDate(),
                 employeeId: new ObjectId(employeeId),
             },
         });
