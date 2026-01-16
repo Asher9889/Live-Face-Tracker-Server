@@ -26,6 +26,7 @@ type CloseSessionInput = {
 }
 
 // internal, NOT exported to frontend
+type AttendanceFlag = "LATE_ENTRY" | "EARLY_EXIT" | "MISSING_EXIT" | "OVERTIME";
 interface TodayAttendanceSessionAggResult {
     employee: {
         id: string;
@@ -46,7 +47,7 @@ interface TodayAttendanceSessionAggResult {
 
     status: "COMPLETED" | "ONGOING";
 
-    flags: string[];
+    flags: AttendanceFlag[];
 
     sessions: Array<{
         entryAt: number;
@@ -98,18 +99,75 @@ export default class AttendanceService {
 
     async getEmployeeTodayAttendanceSession(employeeId: string) {
         const pipeline = this.getEmployeeTodayAttendanceSessionPipeline(employeeId);
-        const raw = await AttendanceModel.aggregate<TodayAttendanceSessionAggResult>(pipeline);
-        const session = raw[0];
+        const raw = await AttendanceModel.aggregate(pipeline);
+        // firstEntry, lastExit , totalDurationMinutes , breakDurationMinutes ,status, flags
+        const data = raw[0];
+        const sessions = raw[0].sessions;
 
-        if (session?.status === "ONGOING") {
-            const now = Date.now();
-            const openSession = session.sessions.find((s) => !s.exitAt);
-            if (!openSession) return;
+        data.firstEntry = sessions[0]?.entryAt;
+        data.lastExit = sessions[sessions.length - 1].exitAt ?? null;
 
-            const liveMinutes = Number(((now - openSession.entryAt) / 60000).toFixed(1));
-            session.totalDurationMinutes = (session.totalDurationMinutes ?? 0) + liveMinutes;
+        const now = Date.now();
+
+        /**
+         * if exitAt and duration present takes totalDurationMs else += now - last.entryAt
+        */
+        let totalDurationMs = 0;
+        for (const s of sessions) {
+            if (s.exitAt && s.durationMs) {
+                totalDurationMs += s.durationMs;
+            } else {
+                // open session (live)
+                totalDurationMs += now - s.entryAt;
+            }
         }
-        return session;
+        data.totalDurationMinutes = Number((totalDurationMs / 60000).toFixed(1));
+
+        /**
+         * Break: next.entryAt - previous.exitAt
+         */
+        let breakMs = 0;
+        for (let i = 0; i < sessions.length - 1; i++) {
+            const current = sessions[i];
+            const next = sessions[i + 1];
+
+            if (!current.exitAt) continue;
+
+            const gap = next.entryAt - current.exitAt;
+            if (gap > 0) breakMs += gap;
+        }
+
+        data.breakDurationMinutes = Number((breakMs / 60000).toFixed(1));
+        /**
+         * 
+         */
+
+        const hasAnySession = sessions.length > 0;
+        const hasOpenSession = sessions.some((s: any) => !s.exitAt);
+        const allClosed = sessions.every((s: any) => s.exitAt);
+        const isToday = data.date === todayDate();
+
+        if (!hasAnySession) {
+            data.status = "ABSENT";
+        }
+        else if (hasOpenSession) {
+            data.status = isToday ? "ONGOING" : "INCOMPLETE"; // safety net
+        }
+        else if (allClosed) {
+            data.status = "COMPLETED";
+        }
+        else {
+            data.status = "INCOMPLETE"; // safety net
+        }
+
+        let flags: AttendanceFlag[] = [];
+        // Flags
+        if (data.firstEntry && data.firstEntry > envConfig.officeStartTime) {
+            flags.push("LATE_ENTRY");
+        }
+
+        data.flags = flags;
+        return data;
     }
 
     async openSession(params: StartSessionInput) {
@@ -421,6 +479,7 @@ export default class AttendanceService {
                         avatar: { $arrayElemAt: ["$employee.faceImages", 0] },
                         department: "$employee.department",
                         role: "$employee.role",
+                        email: "$employee.email"
                     },
                 },
                 date: { $first: "$date" },
@@ -448,45 +507,6 @@ export default class AttendanceService {
                 _id: 0,
                 employee: 1,
                 date: 1,
-                firstEntry: 1,
-                lastExit: 1,
-
-                totalDurationMinutes: {
-                    $divide: ["$totalDurationMs", 60000],
-                },
-
-                breakDurationMinutes: {
-                    $divide: [
-                        {
-                            $subtract: [
-                                { $subtract: ["$lastExit", "$firstEntry"] },
-                                "$totalDurationMs",
-                            ],
-                        },
-                        60000,
-                    ],
-                },
-
-                status: {
-                    $cond: [
-                        { $gt: ["$lastExit", null] },
-                        "COMPLETED",
-                        "ONGOING",
-                    ],
-                },
-
-
-                flags: {
-                    $setUnion: [
-                        {
-                            $cond: [
-                                { $gt: ["$firstEntry", envConfig.officeStartTime] },
-                                ["LATE_ENTRY"],
-                                [],
-                            ],
-                        },
-                    ],
-                },
                 sessions: 1,
             },
         });
