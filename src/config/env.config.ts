@@ -8,19 +8,19 @@ dotenv.config();
 
 const envConfig: IEnv = {
     port: Number(process.env.PORT),
-    nodeEnv: process.env.NODE_ENV || "development",
+    nodeEnv: process.env.NODE_ENV!,
 
-    dbName: process.env.MONGO_DBNAME || "faceTracker_dev_db",
+    dbName: process.env.MONGO_DBNAME!,
 
     
-    mongoUser: process.env.MONGO_USER || "",
-    mongoPassword: process.env.MONGO_PASSWORD || "",
-    mongoHost: process.env.MONGO_HOST || "localhost",
-    mongoPort: process.env.MONGO_PORT || "27017",
-    mongoAuthSource: process.env.MONGO_AUTHSOURCE || "admin",
+    mongoUser: process.env.MONGO_USER!,
+    mongoPassword: process.env.MONGO_PASSWORD!,
+    mongoHost: process.env.MONGO_HOST!,
+    mongoPort: process.env.MONGO_PORT!,
+    mongoAuthSource: process.env.MONGO_AUTHSOURCE!,
     // Build URL dynamically if not provided directly
-    accessSecret: process.env.JWT_ACCESS_SECRET || "test",
-    refreshSecret: process.env.JWT_REFRESH_SECRET || "test",
+    accessSecret: process.env.JWT_ACCESS_SECRET!,
+    refreshSecret: process.env.JWT_REFRESH_SECRET!,
 
     // Hostinger
     gmailWebMailHost: process.env.GMAIL_WEB_MAIL_HOST!!,
@@ -29,10 +29,10 @@ const envConfig: IEnv = {
     gmailWebMailPass: process.env.GMAIL_WEB_MAIL_PASS!!,
 
     // Client Email
-    clientEmail: process.env.CLIENT_EMAIL || "",
+    clientEmail: process.env.CLIENT_EMAIL!,
 
     //
-    enquiryN8NWebhookUrl: process.env.N8N_ENQUIRY || "",
+    enquiryN8NWebhookUrl: process.env.N8N_ENQUIRY!,
 
     // Multer Employee
     employeeImageMaxCount: Number(process.env.EMPLOYEE_IMAGE_MAX_COUNT),

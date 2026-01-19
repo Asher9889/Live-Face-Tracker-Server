@@ -5,7 +5,7 @@ import { attendanceEventsQuerySchema } from "./attendance.validation";
 
 const router = express.Router();
 
-router.get("/events", validateQuery(attendanceEventsQuerySchema), attendanceController.getAllAttendenceEvents);
 router.get("/today/:employeeId", attendanceController.getEmployeeTodayAttendanceSession);
+router.get("/events", validateQuery(attendanceEventsQuerySchema), attendanceController.getAllAttendenceEvents);
 
 export default router;

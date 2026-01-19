@@ -36,8 +36,8 @@
     // "noUnusedParameters": true,       // set true later once code stabilize
 
     // === Performance ===
-    "incremental": true,               // speeds up recompilation
-    "isolatedModules": true,
+    // "incremental": true,               // speeds up recompilation
+    // "isolatedModules": true,
   },
   "include": ["./src"],
   "exclude": ["node_modules"]
