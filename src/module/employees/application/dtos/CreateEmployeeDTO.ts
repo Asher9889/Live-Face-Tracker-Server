@@ -24,3 +24,8 @@ export interface EmployeeListDTO {
   department: TDepartment;
   role: TRole;
 }
+
+export type EmployeeQueryDTO = {
+  limit: number;
+  cursor?: string;
+}

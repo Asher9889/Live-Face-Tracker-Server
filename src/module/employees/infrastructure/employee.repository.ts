@@ -2,7 +2,8 @@ import EmployeeModel from "./employee.model";
 import { Employee } from "../domain/employee.entity";
 import { IEmployeeRepository } from "./IEmployeeRepository";
 import { EmployeeEmbeddingDTO, EmployeeListDTO } from "../application/dtos/CreateEmployeeDTO";
-
+import { envConfig } from "../../../config";
+import { ObjectId } from "mongodb";
 export class EmployeeRepository implements IEmployeeRepository {
   async save(employee: Employee): Promise<Employee> {
     const doc = await EmployeeModel.create(employee);
@@ -19,14 +20,17 @@ export class EmployeeRepository implements IEmployeeRepository {
     return docs;
   }
  
-  async findAll(): Promise<EmployeeListDTO[]> {
-    const docs = await EmployeeModel.find({}, { _id: 0 }).lean();
+  async findAll({filter, limit, sort}: {filter: any; limit: number; sort: Record<string, 1 | -1>;}): Promise<EmployeeListDTO[]> {
+    
+    const docs = await EmployeeModel.find(filter).limit(limit).sort(sort).lean();
+    
     return docs.map(doc => ({
-      id: doc.id!,
+      id: doc._id.toString(),
       name: doc.name,
       email: doc.email,
       department: doc.department,
-      role: doc.role
+      role: doc.role,
+      avatar: envConfig.minioEndpoint + '/' + envConfig.minioEmployeeBucketName + '/' + doc.faceImages[0]
     }));
   }
  

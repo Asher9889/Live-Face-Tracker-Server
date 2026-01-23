@@ -8,6 +8,7 @@ import MinioService from "../../shared/minio/minio.service";
 import { EmployeeMinioService } from "../infrastructure/employess.minio.service";
 import { envConfig } from "../../../config";
 import { EventBus, EventNames } from "../../../events";
+import { ObjectId } from "mongodb";
 
 export class EmployeeService {
   private embeddingService: EmployeeEmbeddingService;
@@ -55,8 +56,30 @@ export class EmployeeService {
     return saved;
   }
 
-  async findAllEmployees() {
-    return this.repo.findAll();
+  async findAllEmployees(query: { limit: number, cursor?: string }):Promise<{data: any[], hasMore: boolean, cursor: string | null}> {
+    const { limit, cursor } = query;
+
+    const queryFilter: any = {};
+
+    if (cursor) {
+      queryFilter._id = { $lt: new ObjectId(cursor) };
+    }
+
+    const docs = await this.repo.findAll({
+      filter: queryFilter,
+      limit: limit + 1, // fetch extra for hasMore
+      sort: { _id: -1 },
+    });
+
+    const hasMore = docs.length > limit;
+    const data = hasMore ? docs.slice(0, limit) : docs;
+    const nextCursor = hasMore ? data?.[data.length - 1]?.id : null;
+
+    return {
+      data,
+      hasMore,
+      cursor: nextCursor || null,
+    };
   }
 
   async findAllEmbeddings() {

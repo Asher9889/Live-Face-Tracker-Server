@@ -79,7 +79,7 @@ export default class AttendanceService {
 
         if (isTodayOnly) {
             const aggregationPipeline = this.buildTodayPresencePipeline({ from: today, to: today, status, type, cursor, limit });
-            console.log("aggegation pipeline is: ", aggregationPipeline);
+
             const data = await PresenceModel.aggregate(aggregationPipeline);
             records = data;
         }

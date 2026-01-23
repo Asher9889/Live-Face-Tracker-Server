@@ -3,12 +3,13 @@ import { CustomRequest } from "../../types/express";
 import { attendanceService } from "./attendance.module";
 import { ApiError, ApiResponse } from "../../utils";
 import { StatusCodes } from "http-status-codes";
+import { AttendanceEventsQueryDTO } from "./attendance.types";
 
 
 export default class AttendanceController {
 
 
-    getAllAttendenceEvents = async (req: CustomRequest, res: Response): Promise<Response> => {
+    getAllAttendenceEvents = async (req: CustomRequest<AttendanceEventsQueryDTO>, res: Response): Promise<Response> => {
         try {
             const query = req.validatedQuery;
             if (!query) throw new ApiError(StatusCodes.BAD_REQUEST, "Query params are required", [{ field: "query", message: "Query params are required" }]);
