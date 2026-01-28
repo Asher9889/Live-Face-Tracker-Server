@@ -20,17 +20,16 @@ presenceController.recoverFromDBOnStartup();
 const app = express();
 const server = http.createServer(app);
 
-const allowedOrigins = ["http://localhost:5173", "http://160.25.62.109:8203"]
+const allowedOrigins = ["http://localhost:5173", "http://160.25.62.109:8203", "https://live-face-tracker.mssplonline.in"]
 app.use(cors({
     origin: function (origin, callback) {
-
         if(!origin){
             return callback(new Error("An origin is required"));
         }
         if (allowedOrigins.includes(origin)) {
             return callback(null, origin); // echo the origin
         }
-        callback(new Error("Not allowed by CORS"));
+        callback(new Error("Not allowed by CORS")); 
     },
     credentials: true
 }));
