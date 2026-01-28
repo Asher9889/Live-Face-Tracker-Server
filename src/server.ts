@@ -20,10 +20,10 @@ presenceController.recoverFromDBOnStartup();
 const app = express();
 const server = http.createServer(app);
 
-const allowedOrigins = ["http://localhost:5173"]
+const allowedOrigins = ["http://localhost:5173", "http://160.25.62.109:8203"]
 app.use(cors({
     origin: function (origin, callback) {
-        console.log("origins", origin)
+
         if(!origin){
             return callback(new Error("An origin is required"));
         }
