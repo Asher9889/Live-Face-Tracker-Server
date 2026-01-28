@@ -16,18 +16,23 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "tsc",
-    "dev": "nodemon src/server.ts"
+    "dev": "nodemon src/server.ts",
+    "seed": "ts-node src/seeders/auth.seeder.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.946.0",
     "@fontsource/ibm-plex-sans": "^5.2.8",
     "@types/cors": "^2.8.19",
+    "argon2": "^0.44.0",
     "axios": "^1.13.2",
+    "cookie-parser": "^1.4.7",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "http-status-codes": "^2.3.0",
     "ioredis": "^5.8.2",
+    "joi": "^18.0.2",
+    "jsonwebtoken": "^9.0.3",
     "livekit-server-sdk": "^2.15.0",
     "luxon": "^3.7.2",
     "mongoose": "^9.0.0",
@@ -38,7 +43,9 @@
     "zod": "^4.1.13"
   },
   "devDependencies": {
+    "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.5",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/luxon": "^3.7.1",
     "@types/ms": "^2.1.0",
     "@types/multer": "^2.0.0",

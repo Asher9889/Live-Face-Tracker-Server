@@ -10,6 +10,7 @@ import initCameraBBoxSubscriber from "./stream/initCameraBBoxSubscriber";
 import { initEventHandlers } from "./events/Event";
 import loadCameraConfigsToRedis from "./module/cameras/infrastructure/camera.cache";
 import { presenceController } from "./module/presence/presence.module";
+import cookieParser from "cookie-parser";
 
 connectMongoDB();
 connectRedis();
@@ -25,9 +26,10 @@ initCameraStatusSubscriber();
 initCameraBBoxSubscriber();
 
 app.use(express.json());
+app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
 app.use(cors());
-
+ 
 app.use("/api", apiRouter)
 
 app.use(routeNotExistsHandler);
