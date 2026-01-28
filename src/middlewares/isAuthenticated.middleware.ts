@@ -8,10 +8,9 @@ import { Auth } from "../module/auth";
 import { CustomRequest } from "../types/express";
 
 async function isAuthenticated(req: CustomRequest, res: Response, next: NextFunction) {
-    console.log("isAuthenticated middleware");
+
     const cookies = req.cookies;
     const { accessToken } = cookies;
-    console.log("accessToken", accessToken);
     if (!accessToken) {
         return ApiResponse.error(res, "Please provide valid access token", StatusCodes.UNAUTHORIZED);
     };
