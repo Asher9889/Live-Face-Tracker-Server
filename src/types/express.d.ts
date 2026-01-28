@@ -3,9 +3,10 @@ import { AttendanceEventsQueryDTO, AttendenceQueryDTO } from "../module/attendan
 import { EmployeeQueryDTO } from "../module/employees/application/dtos/CreateEmployeeDTO";
 
 
-export interface CustomRequest<TQuery = unknown, TBody = unknown, TParams = unknown> extends Request {
+export interface CustomRequest<TQuery = unknown, TBody = unknown, TParams = unknown, TUser = unknown> extends Request {
   validatedQuery?: TQuery;
   validatedBody?: TBody;
   validatedParams?: TParams;
+  user?: TUser;
 }
 

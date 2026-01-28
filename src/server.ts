@@ -20,6 +20,21 @@ presenceController.recoverFromDBOnStartup();
 const app = express();
 const server = http.createServer(app);
 
+const allowedOrigins = ["http://localhost:5173"]
+app.use(cors({
+    origin: function (origin, callback) {
+        console.log("origins", origin)
+        if(!origin){
+            return callback(new Error("An origin is required"));
+        }
+        if (allowedOrigins.includes(origin)) {
+            return callback(null, origin); // echo the origin
+        }
+        callback(new Error("Not allowed by CORS"));
+    },
+    credentials: true
+}));
+
 initEventHandlers(); // for internal event_emitter 
 initWSSStreaming(server);
 initCameraStatusSubscriber();
@@ -28,8 +43,7 @@ initCameraBBoxSubscriber();
 app.use(express.json());
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
-app.use(cors());
- 
+
 app.use("/api", apiRouter)
 
 app.use(routeNotExistsHandler);

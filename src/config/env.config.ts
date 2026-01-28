@@ -23,6 +23,9 @@ const envConfig: IEnv = {
     accessSecret: process.env.JWT_ACCESS_SECRET!,
     refreshSecret: process.env.JWT_REFRESH_SECRET!,
 
+    accessTokenMaxAge: parseDuration(process.env.JWT_ACCESS_TOKEN_MAX_AGE as StringValue, "JWT_ACCESS_TOKEN_MAX_AGE"),
+    refreshTokenMaxAge: parseDuration(process.env.JWT_REFRESH_TOKEN_MAX_AGE as StringValue, "JWT_REFRESH_TOKEN_MAX_AGE"),
+
     // Hostinger
     gmailWebMailHost: process.env.GMAIL_WEB_MAIL_HOST!!,
     gmailWebMailPort: Number(process.env.GMAIL_WEB_MAIL_PORT) || 465,

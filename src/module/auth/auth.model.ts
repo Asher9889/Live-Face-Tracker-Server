@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 import argon2 from "argon2";
 import jwt from "jsonwebtoken";
+import { envConfig } from "../../config";
 
 
 interface IAuth extends mongoose.Document{
@@ -36,8 +37,8 @@ authSchema.pre("save", async function(){
 });
 
 authSchema.methods.generateTokens = function(data: {id: string, role: string}){
-    const accessToken = jwt.sign(data, process.env.JWT_ACCESS_SECRET!, { expiresIn: "15m" });
-    const refreshToken = jwt.sign(data, process.env.JWT_REFRESH_SECRET!, { expiresIn: "7d" });
+    const accessToken = jwt.sign(data, envConfig.accessSecret, { expiresIn: envConfig.accessTokenMaxAge });
+    const refreshToken = jwt.sign(data, envConfig.refreshSecret, { expiresIn: envConfig.refreshTokenMaxAge });
     return { accessToken, refreshToken };
 }
 

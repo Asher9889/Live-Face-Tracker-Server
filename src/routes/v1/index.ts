@@ -6,16 +6,17 @@ import { authRoutes } from "../../module/auth";
 import presenceRoutes from "../../module/presence";
 import dashboardRoutes from "../../module/dashboard";
 import { attendanceRoutes } from "../../module/attendance";
+import { isAuthenticated } from "../../middlewares";
 
 router.use("/auth", authRoutes);
-router.use("/employees", employeesRoutes);
-router.use("/presence", presenceRoutes);
-router.use("/cameras", camerasRoutes);
-router.use("/dashboard", dashboardRoutes);
-router.use("/attendance", attendanceRoutes);
+router.use("/employees", isAuthenticated,  employeesRoutes);
+router.use("/presence", isAuthenticated, presenceRoutes);
+router.use("/cameras", isAuthenticated, camerasRoutes);
+router.use("/dashboard", isAuthenticated, dashboardRoutes);
+router.use("/attendance", isAuthenticated, attendanceRoutes);
 
-router.get("/test", (req, res) => {
-    res.send("Hello World!");
+router.get("/ping", (req, res) => {
+    res.send("pong");
 });
 
 

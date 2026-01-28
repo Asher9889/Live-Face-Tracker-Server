@@ -10,6 +10,8 @@ interface IEnv {
     dbName: string;
     accessSecret: string;
     refreshSecret: string;
+    accessTokenMaxAge: number;
+    refreshTokenMaxAge: number;
     gmailWebMailHost: string;
     gmailWebMailPort:number;
     gmailWebMailUser:string;
