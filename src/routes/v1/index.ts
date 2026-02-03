@@ -11,7 +11,7 @@ import { isAuthenticated } from "../../middlewares";
 router.use("/auth", authRoutes);
 router.use("/employees", isAuthenticated,  employeesRoutes);
 router.use("/presence", isAuthenticated, presenceRoutes);
-router.use("/cameras", isAuthenticated, camerasRoutes);
+router.use("/cameras", camerasRoutes);
 router.use("/dashboard", isAuthenticated, dashboardRoutes);
 router.use("/attendance", isAuthenticated, attendanceRoutes);
 

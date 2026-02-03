@@ -2,7 +2,7 @@ import express from "express";
 import CameraController from "./camera.controller";
 import CameraService from "../application/camera.service";
 import CameraRepository from "../infrastructure/camera.repository";
-import { validate } from "../../../middlewares";
+import { isAuthenticated, validate } from "../../../middlewares";
 import { cameraSchema } from "../infrastructure/camera.schema";
 import cameraController from "../../../stream";
 import cameraUrl from "../../../config/camera";
@@ -13,12 +13,15 @@ const router = express.Router();
 
 const controller = new CameraController(new CameraService(new CameraRepository));
 
-router.post("/", validate(cameraSchema), controller.createCamera);
+router.post("/", isAuthenticated, validate(cameraSchema), controller.createCamera);
 router.get("/", controller.getAllCameras);
-router.get("/:cameraId/token", controller.getToken);
-router.post("/:cameraId/start", async (req, res, next) => {
+router.get("/:cameraId/token", isAuthenticated, controller.getToken);
+router.post("/:cameraId/start", isAuthenticated, async (req, res, next) => {
   try {
     const cameraId = req.params.cameraId;
+    if(!cameraId){
+      throw new ApiError(StatusCodes.BAD_REQUEST, "Camera id is required");
+    }
     const rtspUrl = cameraUrl[cameraId];
   
     if (!rtspUrl) {
