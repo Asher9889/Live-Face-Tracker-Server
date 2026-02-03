@@ -23,8 +23,8 @@ const server = http.createServer(app);
 const allowedOrigins = ["http://localhost:5173", "http://160.25.62.109:8203", "https://live-face-tracker.mssplonline.in"]
 app.use(cors({
     origin: function (origin, callback) {
-        if(!origin){
-            return callback(new Error("An origin is required"));
+        if (!origin) {
+            return callback(null, true);
         }
         if (allowedOrigins.includes(origin)) {
             return callback(null, origin); // echo the origin
