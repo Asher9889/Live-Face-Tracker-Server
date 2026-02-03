@@ -6,6 +6,7 @@ import { validate } from "../../middlewares/validate.middleware";
 
 const router = express.Router();
 
-router.post("/", uploadFaces, multerErrorHandler, validate(createUnknownSchema), unknownController.createUnknownEvent);
+router.post("/event", uploadFaces, multerErrorHandler, validate(createUnknownSchema), unknownController.createUnknownEvent);
+// router.post("/event", unknownController.createUnknownEvent);
 
 export default router;

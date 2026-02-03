@@ -22,6 +22,7 @@ const envConfig: IEnv = {
     // Build URL dynamically if not provided directly
     accessSecret: process.env.JWT_ACCESS_SECRET!,
     refreshSecret: process.env.JWT_REFRESH_SECRET!,
+    serviceSecret: process.env.PYTHON_JWT_SECRET!,
 
     accessTokenMaxAge: parseDuration(process.env.JWT_ACCESS_TOKEN_MAX_AGE as StringValue, "JWT_ACCESS_TOKEN_MAX_AGE"),
     refreshTokenMaxAge: parseDuration(process.env.JWT_REFRESH_TOKEN_MAX_AGE as StringValue, "JWT_REFRESH_TOKEN_MAX_AGE"),
