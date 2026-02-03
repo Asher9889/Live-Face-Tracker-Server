@@ -1,6 +1,4 @@
 import jwt from "jsonwebtoken";
-import dotenv from "dotenv";
-dotenv.config();
 
 const token = jwt.sign(
   {
@@ -8,7 +6,7 @@ const token = jwt.sign(
     service: "face-tracker-python",
     role: "internal",
   },
-  process.env.PYTHON_JWT_SECRET!,
+  "IAmPythonSecret", // IAmPythonSecret
   { expiresIn: "365d" }
 );
 
