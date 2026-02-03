@@ -7,6 +7,7 @@ import { StatusCodes } from "http-status-codes";
 import { envConfig } from "../config";
 import EventNames, { RedisEventNames } from "../events/EventNames";
 import { EventBus } from "../events";
+import CameraModel from "../module/cameras/infrastructure/camera.model";
 
 type CameraProcess = {
   ffmpeg: ChildProcess;
@@ -18,10 +19,18 @@ type CameraProcess = {
 export class CameraController {
   private processes = new Map<string, CameraProcess>();
 
-  async start(cameraId: string, rtspUrl: string): Promise<IngressInfo> {
+  async start(cameraId: string): Promise<IngressInfo> {
     if (this.processes.has(cameraId)) {
       throw new ApiError(StatusCodes.OK, "Camera already running");
     }
+    
+    const camera = await CameraModel.findOne({code: cameraId}, {rtspUrl: 1}).lean();
+    if(!camera){
+      throw new ApiError(StatusCodes.NOT_FOUND, "Camera not found");
+    }
+
+    const rtspUrl = camera.rtspUrl;
+
 
     //Create ingress (THIS creates the LiveKit participant)
     const ingress = await createCameraIngress(cameraId);

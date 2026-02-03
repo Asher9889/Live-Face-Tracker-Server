@@ -22,13 +22,15 @@ router.post("/:cameraId/start", isAuthenticated, async (req, res, next) => {
     if(!cameraId){
       throw new ApiError(StatusCodes.BAD_REQUEST, "Camera id is required");
     }
-    const rtspUrl = cameraUrl[cameraId];
+
+    // const rtspUrl = cameraUrl[cameraId];
   
-    if (!rtspUrl) {
-      throw new ApiError(StatusCodes.NOT_FOUND, "Camera not found");
-    }
+    // if (!rtspUrl) {
+    //   throw new ApiError(StatusCodes.NOT_FOUND, "Camera not found");
+    // }
   
-    await cameraController.start(cameraId, rtspUrl);
+    // await cameraController.start(cameraId, rtspUrl);
+    await cameraController.start(cameraId);
   
     return res.json({ status: "started", cameraId });
   } catch (error) {
