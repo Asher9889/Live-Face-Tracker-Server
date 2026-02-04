@@ -1,18 +1,17 @@
 import { NextFunction, Request, Response } from "express";
-import { CreateUnknownDTO } from "./unknown.types";
+import { CreateUnknownEventDTO } from "./unknown.types";
 import { unknownService } from "./unknown.module";
+import { ApiResponse } from "../../utils";
 
 class UnknownController {
-    constructor(){}
     async createUnknownEvent(req: Request, res: Response, next: NextFunction){
         try {
-            console.log("createUnknownEvent", req.body);
-            console.log("createUnknownEvent", req.files);
-            const { camera_code, pid, reason, tid, timestamp } = req.body as CreateUnknownDTO;
-            const faces = req.files;
-            await unknownService.createUnknownEvent();
-            
-        } catch (error) {
+
+            const { camera_code, pid, reason, tid, timestamp } = req.body as CreateUnknownEventDTO;
+            const faces = req.files as Express.Multer.File[];
+            const { eventId, identityId } = await unknownService.createUnknownEvent({ camera_code, pid, reason, tid, timestamp }, faces);
+            return ApiResponse.success(res, "Unknown event created successfully", { eventId, identityId });
+        } catch (error) { 
             return next(error);
         }
     }

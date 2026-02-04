@@ -1,6 +1,6 @@
 import zod from "zod";
 
-const createUnknownSchema = zod.object({
+const createUnknownEventSchema = zod.object({
     camera_code: zod.string(),
     pid: zod.string(),
     reason: zod.string(),
@@ -8,4 +8,4 @@ const createUnknownSchema = zod.object({
     timestamp: zod.string(),
 });
 
-export default createUnknownSchema;
+export default createUnknownEventSchema;

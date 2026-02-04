@@ -14,4 +14,4 @@ const minioClient = new S3Client({
 });
 const employeeService = new EmployeeService(new EmployeeRepository(), minioClient);
 
-export { employeeService };
+export { employeeService, minioClient };
