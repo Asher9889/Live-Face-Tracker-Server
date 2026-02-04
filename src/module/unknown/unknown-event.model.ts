@@ -45,4 +45,4 @@ const UnknownEventSchema = new Schema<IUnknownEvent>(
   }
 );
 
-export const UnknownEventModel = model<IUnknownEvent>("UnknownEvent",UnknownEventSchema);
+export const UnknownEventModel = model<IUnknownEvent>("UnknownEvent",UnknownEventSchema, "unknown_event");

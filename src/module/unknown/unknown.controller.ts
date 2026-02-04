@@ -6,7 +6,6 @@ import { ApiResponse } from "../../utils";
 class UnknownController {
     async createUnknownEvent(req: Request, res: Response, next: NextFunction){
         try {
-
             const { camera_code, pid, reason, tid, timestamp } = req.body as CreateUnknownEventDTO;
             const faces = req.files as Express.Multer.File[];
             const { eventId, identityId } = await unknownService.createUnknownEvent({ camera_code, pid, reason, tid, timestamp }, faces);

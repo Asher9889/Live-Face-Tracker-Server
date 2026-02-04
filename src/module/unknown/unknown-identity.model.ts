@@ -1,4 +1,4 @@
-import { Schema, model } from "mongoose";
+import mongoose from "mongoose";
 
 export type IdentityStatus = "unknown" | "converted";
 
@@ -17,7 +17,7 @@ export interface IUnknownIdentity {
   updatedAt: Date;
 }
 
-const UnknownIdentitySchema = new Schema<IUnknownIdentity>(
+const UnknownIdentitySchema = new mongoose.Schema<IUnknownIdentity>(
   {
     representativeEmbedding: {
       type: [Number],
@@ -49,4 +49,4 @@ const UnknownIdentitySchema = new Schema<IUnknownIdentity>(
   }
 );
 
-export const UnknownIdentityModel = model<IUnknownIdentity>("UnknownIdentity", UnknownIdentitySchema);
+export const UnknownIdentityModel = mongoose.model<IUnknownIdentity>("UnknownIdentity", UnknownIdentitySchema, "unknown_identity");

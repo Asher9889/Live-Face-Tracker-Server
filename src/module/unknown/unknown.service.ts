@@ -5,147 +5,149 @@ import { EmbeddingBase } from "../shared/embedding/embedding.base";
 import MinioService from "../shared/minio/minio.service";
 import { UnknownIdentityModel } from "./unknown-identity.model";
 import { UnknownEventModel } from "./unknown-event.model";
+import { ApiError } from "../../utils";
+import { StatusCodes } from "http-status-codes";
 
 class UnknownEmbeddingService extends EmbeddingBase {
-    constructor(apiUrl: string) {
-        super(apiUrl);
-    }
-    generateEmbeddingsForUnknown = async (files: Express.Multer.File[]) => {
-        return await this.requestEmbedding(files);
-    }
+  constructor(apiUrl: string) {
+    super(apiUrl);
+  }
+  generateEmbeddingsForUnknown = async (files: Express.Multer.File[]) => {
+    return await this.requestEmbedding(files);
+  }
 }
 
 class UnknownService {
 
-    private minioService: MinioService;
-    private embeddingService: UnknownEmbeddingService;
+  private minioService: MinioService;
+  private embeddingService: UnknownEmbeddingService;
 
-    constructor() {
-        this.minioService = new MinioService();
-        this.embeddingService = new UnknownEmbeddingService(envConfig.embeddingApiUrl);
+  constructor() {
+    this.minioService = new MinioService();
+    this.embeddingService = new UnknownEmbeddingService(envConfig.embeddingApiUrl);
+  }
+
+
+  createUnknownEvent = async (eventData: CreateUnknownEventDTO, faces: Express.Multer.File[]): Promise<{ eventId: string, identityId: string }> => {
+    /**
+     * Save faces to storage.
+     * Save convert images to embeddings.
+     * Save data to unknown collection.
+     */
+    const eventId = uuidv4();
+    const { camera_code, pid, reason, tid, timestamp } = eventData;
+
+    // Generate embeddings
+    const embeddingRes = await this.embeddingService.generateEmbeddingsForUnknown(faces);
+
+    if (!embeddingRes.success || !embeddingRes.mean_embedding) {
+      throw new ApiError(StatusCodes.INTERNAL_SERVER_ERROR, "Embedding generation failed");
     }
 
-
-    createUnknownEvent = async (eventData: CreateUnknownEventDTO, faces: Express.Multer.File[]):Promise<{ eventId: string, identityId: string }> => {
-        /**
-         * Save faces to storage.
-         * Save convert images to embeddings.
-         * Save data to unknown collection.
-         */
-        const eventId = uuidv4();
-        const { camera_code, pid, reason, tid, timestamp } = eventData;
-
-        // Generate embeddings
-        const embeddingRes = await this.embeddingService.generateEmbeddingsForUnknown(faces);
-
-        if (!embeddingRes.success || !embeddingRes.mean_embedding) {
-            throw new Error("Embedding generation failed");
-        }
-
-        const meanEmbedding = embeddingRes.mean_embedding;
-        const bestFace = this.pickBestFace(faces);
+    const meanEmbedding = embeddingRes.mean_embedding;
+    const bestFace = this.pickBestFace(faces);
 
 
-        const imageKey = await this.uploadUnknownPersonImage(eventId, bestFace);
+    const imageKey = await this.uploadUnknownPersonImage(eventId, bestFace);
 
-        // Try to match existing identity
-        let identity = await this.findClosestIdentity(meanEmbedding);
+    // Try to match existing identity
+    let identity = await this.findClosestIdentity(meanEmbedding);
 
-        if (!identity) {
-            // create new identity
-            identity = await UnknownIdentityModel.create({
-                representativeEmbedding: meanEmbedding,
-                representativeImageKey: imageKey,
-                eventCount: 1,
-                firstSeen: Number(timestamp),
-                lastSeen: Number(timestamp),
-                status: "unknown",
-            });
-        } else {
-            // update identity stats only
-            identity.eventCount += 1;
-            identity.lastSeen = Number(timestamp);
-            await identity.save();
-        }
-
-        // Create event record (immutable)
-        await UnknownEventModel.create({
-            eventId,
-            cameraCode: camera_code,
-            trackerId: pid || tid,
-            reason,
-            timestamp: Number(timestamp),
-            identityId: identity._id,
-            meanEmbedding,
-            imageKey,
-        });
-
-        return { eventId, identityId: identity._id };
-
+    if (!identity) {
+      // create new identity
+      identity = await UnknownIdentityModel.create({
+        representativeEmbedding: meanEmbedding,
+        representativeImageKey: imageKey,
+        eventCount: 1,
+        firstSeen: Number(timestamp),
+        lastSeen: Number(timestamp),
+        status: "unknown",
+      });
+    } else {
+      // update identity stats only
+      identity.eventCount += 1;
+      identity.lastSeen = Number(timestamp);
+      await identity.save();
     }
 
-    private uploadUnknownPersonImage = async (eventId: string, file: Express.Multer.File) => {
+    // Create event record (immutable)
+    await UnknownEventModel.create({
+      eventId,
+      cameraCode: camera_code,
+      trackerId: pid || tid,
+      reason,
+      timestamp: Number(timestamp),
+      identityId: identity._id,
+      meanEmbedding,
+      imageKey,
+    });
 
-        const bucket = envConfig.minioEmployeeBucketName;
-        const prefix = `unknown_persons/events/${eventId}`;
+    return { eventId, identityId: identity._id };
 
-        const key = this.minioService.generateKey(prefix, file.originalname);
+  }
 
-        await this.minioService.upload(bucket, key, file);
+  private uploadUnknownPersonImage = async (eventId: string, file: Express.Multer.File) => {
 
-        return key;
-    };
+    const bucket = envConfig.minioEmployeeBucketName;
+    const prefix = `unknown_persons/events/${eventId}`;
 
-    private pickBestFace(files: Express.Multer.File[]) {
-        return files.reduce((prev, curr) =>
-            curr.size > prev.size ? curr : prev
-        );
+    const key = this.minioService.generateKey(prefix, file.originalname);
+
+    await this.minioService.upload(bucket, key, file);
+
+    return key;
+  };
+
+  private pickBestFace(files: Express.Multer.File[]) {
+    return files.reduce((prev, curr) =>
+      curr.size > prev.size ? curr : prev
+    );
+  }
+
+  private cosineSimilarity(a: number[], b: number[]) {
+
+    if (!a || !b || a.length !== b.length) {
+      throw new Error("Embedding vectors invalid");
     }
 
-    private cosineSimilarity(a: number[], b: number[]) {
+    let dot = 0;
+    let magA = 0;
+    let magB = 0;
 
-        if (!a || !b || a.length !== b.length) {
-            throw new Error("Embedding vectors invalid");
-        }
+    for (let i = 0; i < a.length; i++) {
 
-        let dot = 0;
-        let magA = 0;
-        let magB = 0;
+      const ai = a[i] ?? 0;
+      const bi = b[i] ?? 0;
 
-        for (let i = 0; i < a.length; i++) {
-
-            const ai = a[i] ?? 0;
-            const bi = b[i] ?? 0;
-
-            dot += ai * bi;
-            magA += ai * ai;
-            magB += bi * bi;
-        }
-
-        return dot / (Math.sqrt(magA) * Math.sqrt(magB));
+      dot += ai * bi;
+      magA += ai * ai;
+      magB += bi * bi;
     }
 
+    return dot / (Math.sqrt(magA) * Math.sqrt(magB));
+  }
 
-    private async findClosestIdentity(embedding: number[]) {
 
-        const identities = await UnknownIdentityModel.find().limit(100);
+  private async findClosestIdentity(embedding: number[]) {
 
-        let bestMatch: any = null;
-        let bestScore = -1;
+    const identities = await UnknownIdentityModel.find().limit(100);
 
-        for (const id of identities) {
-            const score = this.cosineSimilarity(embedding, id.representativeEmbedding);
+    let bestMatch: any = null;
+    let bestScore = -1;
 
-            if (score > bestScore) {
-                bestScore = score;
-                bestMatch = id;
-            }
-        }
+    for (const id of identities) {
+      const score = this.cosineSimilarity(embedding, id.representativeEmbedding);
 
-        const THRESHOLD = 0.5;
-
-        return bestScore > THRESHOLD ? bestMatch : null;
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatch = id;
+      }
     }
+
+    const THRESHOLD = 0.5;
+
+    return bestScore > THRESHOLD ? bestMatch : null;
+  }
 }
 
 export default UnknownService;
