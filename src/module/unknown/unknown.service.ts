@@ -7,6 +7,7 @@ import { UnknownIdentityModel } from "./unknown-identity.model";
 import { UnknownEventModel } from "./unknown-event.model";
 import { ApiError } from "../../utils";
 import { StatusCodes } from "http-status-codes";
+import IdentityCacheService from "./identity-cache.service";
 
 class UnknownEmbeddingService extends EmbeddingBase {
   constructor(apiUrl: string) {
@@ -21,10 +22,12 @@ class UnknownService {
 
   private minioService: MinioService;
   private embeddingService: UnknownEmbeddingService;
+  private cacheService: IdentityCacheService;
 
   constructor() {
     this.minioService = new MinioService();
     this.embeddingService = new UnknownEmbeddingService(envConfig.embeddingApiUrl);
+    this.cacheService = new IdentityCacheService(UnknownIdentityModel);
   }
 
 
@@ -51,11 +54,17 @@ class UnknownService {
     const imageKey = await this.uploadUnknownPersonImage(eventId, bestFace);
 
     // Try to match existing identity
-    let identity = await this.findClosestIdentity(meanEmbedding);
+    const match = this.findClosestIdentity(meanEmbedding);
 
-    if (!identity) {
+    let identityDoc: any = null;
+
+    if (match?.id) {
+      identityDoc = await UnknownIdentityModel.findById(match.id);
+    }
+
+    if (!identityDoc) {
       // create new identity
-      identity = await UnknownIdentityModel.create({
+      identityDoc = await UnknownIdentityModel.create({
         representativeEmbedding: meanEmbedding,
         representativeImageKey: imageKey,
         eventCount: 1,
@@ -63,11 +72,13 @@ class UnknownService {
         lastSeen: Number(timestamp),
         status: "unknown",
       });
+
+      this.cacheService.add(identityDoc);
     } else {
       // update identity stats only
-      identity.eventCount += 1;
-      identity.lastSeen = Number(timestamp);
-      await identity.save();
+      identityDoc.eventCount += 1;
+      identityDoc.lastSeen = Number(timestamp);
+      await identityDoc.save();
     }
 
     // Create event record (immutable)
@@ -77,12 +88,12 @@ class UnknownService {
       trackerId: pid || tid,
       reason,
       timestamp: Number(timestamp),
-      identityId: identity._id,
+      identityId: identityDoc._id,
       meanEmbedding,
       imageKey,
     });
 
-    return { eventId, identityId: identity._id };
+    return { eventId, identityId: identityDoc._id };
 
   }
 
@@ -128,26 +139,95 @@ class UnknownService {
   }
 
 
-  private async findClosestIdentity(embedding: number[]) {
+  // private async findClosestIdentity(embedding: number[]) {
 
-    const identities = await UnknownIdentityModel.find().limit(100);
+  //   const identities = await UnknownIdentityModel.find().limit(100);
 
-    let bestMatch: any = null;
+  //   let bestMatch: any = null;
+  //   let bestScore = -1;
+
+  //   for (const id of identities) {
+  //     const score = this.cosineSimilarity(embedding, id.representativeEmbedding);
+
+  //     if (score > bestScore) {
+  //       bestScore = score;
+  //       bestMatch = id;
+  //     }
+  //   }
+
+  //   const THRESHOLD = 0.5;
+
+  //   return bestScore > THRESHOLD ? bestMatch : null;
+  // }
+
+  findClosestIdentity(queryEmbedding: number[]): { id: string; score: number } | null {
+
+    const cache = this.cacheService.getAll();
+    if (!cache.length) return null;
+
+    const query = new Float32Array(queryEmbedding);
+
     let bestScore = -1;
+    let bestMatch: any = null;
 
-    for (const id of identities) {
-      const score = this.cosineSimilarity(embedding, id.representativeEmbedding);
+    for (let k = 0; k < cache.length; k++) {
 
-      if (score > bestScore) {
-        bestScore = score;
-        bestMatch = id;
+      const item = cache[k];
+      if (!item) continue;
+
+      const dbEmb = item.emb;
+
+      if (dbEmb.length !== query.length) continue;
+
+      let dot = 0;
+
+      const DIM = query.length;
+      const limit = DIM - (DIM % 4);
+
+      for (let i = 0; i < limit; i += 4) {
+
+        const q0 = query[i]!;
+        const d0 = dbEmb[i]!;
+
+        const q1 = query[i + 1]!;
+        const d1 = dbEmb[i + 1]!;
+
+        const q2 = query[i + 2]!;
+        const d2 = dbEmb[i + 2]!;
+
+        const q3 = query[i + 3]!;
+        const d3 = dbEmb[i + 3]!;
+
+        dot += q0 * d0;
+        dot += q1 * d1;
+        dot += q2 * d2;
+        dot += q3 * d3;
+      }
+
+      for (let i = limit; i < DIM; i++) {
+        dot += query[i]! * dbEmb[i]!;
+      }
+
+      if (dot > bestScore) {
+        bestScore = dot;
+        bestMatch = item;
       }
     }
 
-    const THRESHOLD = 0.5;
+    const THRESHOLD = 0.45;
 
-    return bestScore > THRESHOLD ? bestMatch : null;
+    if (bestMatch && bestScore > THRESHOLD) {
+      return {
+        id: bestMatch.id,
+        score: bestScore,
+      };
+    }
+
+    return null;
+    // return bestScore > THRESHOLD ? bestMatch : null;
   }
+
+
 }
 
 export default UnknownService;
