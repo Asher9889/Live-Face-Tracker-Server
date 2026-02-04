@@ -1,4 +1,4 @@
-import { CreateUnknownEventDTO } from "./unknown.types";
+import { CreateUnknownEventDTO, GetUnknownPersonsDTO } from "./unknown.types";
 import { v4 as uuidv4 } from "uuid";
 import { envConfig } from "../../config";
 import { EmbeddingBase } from "../shared/embedding/embedding.base";
@@ -22,13 +22,34 @@ class UnknownService {
 
   private minioService: MinioService;
   private embeddingService: UnknownEmbeddingService;
-  private cacheService: IdentityCacheService;
+  public cacheService: IdentityCacheService;
 
   constructor() {
     this.minioService = new MinioService();
     this.embeddingService = new UnknownEmbeddingService(envConfig.embeddingApiUrl);
     this.cacheService = new IdentityCacheService(UnknownIdentityModel);
   }
+
+  async init() {
+    await this.cacheService.warmup();
+  }
+
+
+  getUnknownPersons = async (): Promise<GetUnknownPersonsDTO[]> => {
+    const unknownPersons = await UnknownIdentityModel.find({}, { representativeEmbedding: 0, createdAt: 0, updatedAt: 0 }).lean();
+    const persons = unknownPersons.map((p) => {
+      const { representativeImageKey, _id, ...rest } = p;
+
+      return {
+        ...rest,
+        id: _id.toString(),
+        avatar: this.generateMinioUrl(envConfig.minioEmployeeBucketName, representativeImageKey),
+      }
+    })
+    return persons;
+  }
+
+
 
 
   createUnknownEvent = async (eventData: CreateUnknownEventDTO, faces: Express.Multer.File[]): Promise<{ eventId: string, identityId: string }> => {
@@ -115,51 +136,6 @@ class UnknownService {
     );
   }
 
-  private cosineSimilarity(a: number[], b: number[]) {
-
-    if (!a || !b || a.length !== b.length) {
-      throw new Error("Embedding vectors invalid");
-    }
-
-    let dot = 0;
-    let magA = 0;
-    let magB = 0;
-
-    for (let i = 0; i < a.length; i++) {
-
-      const ai = a[i] ?? 0;
-      const bi = b[i] ?? 0;
-
-      dot += ai * bi;
-      magA += ai * ai;
-      magB += bi * bi;
-    }
-
-    return dot / (Math.sqrt(magA) * Math.sqrt(magB));
-  }
-
-
-  // private async findClosestIdentity(embedding: number[]) {
-
-  //   const identities = await UnknownIdentityModel.find().limit(100);
-
-  //   let bestMatch: any = null;
-  //   let bestScore = -1;
-
-  //   for (const id of identities) {
-  //     const score = this.cosineSimilarity(embedding, id.representativeEmbedding);
-
-  //     if (score > bestScore) {
-  //       bestScore = score;
-  //       bestMatch = id;
-  //     }
-  //   }
-
-  //   const THRESHOLD = 0.5;
-
-  //   return bestScore > THRESHOLD ? bestMatch : null;
-  // }
-
   findClosestIdentity(queryEmbedding: number[]): { id: string; score: number } | null {
 
     const cache = this.cacheService.getAll();
@@ -227,7 +203,9 @@ class UnknownService {
     // return bestScore > THRESHOLD ? bestMatch : null;
   }
 
-
+  generateMinioUrl(bucketName: string, representativeImageKey: string) {
+    return `https://minio.mssplonline.in/${bucketName}/${representativeImageKey}`;
+  }
 }
 
 export default UnknownService;

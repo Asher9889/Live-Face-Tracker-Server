@@ -2,12 +2,13 @@ import { Response } from "express";
 
 export class ApiResponse {
     // due to static we can call this method without creating an instance of the class
-    static success(res: Response, message = "Success", data:any = [], statusCode = 200) {
+    static success(res: Response, message = "Success", data:any = [], statusCode = 200, length?: number) {
         return res.status(statusCode).json({
             success: true,
             statusCode,
             message,
             data: data,
+            length: length,
         });
     }
 

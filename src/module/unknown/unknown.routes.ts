@@ -7,6 +7,8 @@ import { validate } from "../../middlewares/validate.middleware";
 const router = express.Router();
 
 router.post("/event", uploadFaces, multerErrorHandler, validate(createUnknownSchema), unknownController.createUnknownEvent);
+router.get("/persons", unknownController.getUnknownPersons);
+// router.post("/warmup", unknownController);
 // router.post("/event", unknownController.createUnknownEvent);
 
 export default router;

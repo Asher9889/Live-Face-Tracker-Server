@@ -2,6 +2,7 @@ import { NextFunction, Request, Response } from "express";
 import { CreateUnknownEventDTO } from "./unknown.types";
 import { unknownService } from "./unknown.module";
 import { ApiResponse } from "../../utils";
+import { StatusCodes } from "http-status-codes";
 
 class UnknownController {
     async createUnknownEvent(req: Request, res: Response, next: NextFunction){
@@ -11,6 +12,14 @@ class UnknownController {
             const { eventId, identityId } = await unknownService.createUnknownEvent({ camera_code, pid, reason, tid, timestamp }, faces);
             return ApiResponse.success(res, "Unknown event created successfully", { eventId, identityId });
         } catch (error) { 
+            return next(error);
+        }
+    }
+    getUnknownPersons = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const persons = await unknownService.getUnknownPersons();
+            return ApiResponse.success(res, "Unknown persons fetched successfully", persons, StatusCodes.OK, persons.length);
+        } catch (error) {
             return next(error);
         }
     }

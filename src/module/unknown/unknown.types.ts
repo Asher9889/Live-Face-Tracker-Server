@@ -3,10 +3,11 @@ import createUnknownSchema from "./unknown.schema";
 
 export type CreateUnknownEventDTO = zod.infer<typeof createUnknownSchema>;
 
-// export type CreateUnknownEventDTO = {
-//     camera_code: string;
-//     pid: string;
-//     reason: string;
-//     tid: string;
-//     timestamp: string;
-// }
+export interface GetUnknownPersonsDTO {
+    id: string,
+    avatar: string,
+    eventCount: number;
+    firstSeen: number;
+    lastSeen: number;
+    status: string;
+}   
