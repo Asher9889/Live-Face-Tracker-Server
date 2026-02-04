@@ -1,5 +1,6 @@
 import express from "express";
 import cors from "cors";
+import compression from "compression";
 import { connectMongoDB, connectRedis } from "./db";
 import { envConfig } from "./config";
 import { globalErrorHandler, routeNotExistsHandler } from "./utils";
@@ -42,6 +43,7 @@ initCameraBBoxSubscriber();
 app.use(express.json());
 app.use(cookieParser());
 app.use(express.urlencoded({ extended: true }));
+app.use(compression());
 
 app.use("/api", apiRouter)
 

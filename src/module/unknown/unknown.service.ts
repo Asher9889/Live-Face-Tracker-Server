@@ -49,9 +49,6 @@ class UnknownService {
     return persons;
   }
 
-
-
-
   createUnknownEvent = async (eventData: CreateUnknownEventDTO, faces: Express.Multer.File[]): Promise<{ eventId: string, identityId: string }> => {
     /**
      * Save faces to storage.
