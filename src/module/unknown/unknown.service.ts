@@ -34,7 +34,6 @@ class UnknownService {
     await this.cacheService.warmup();
   }
 
-
   getUnknownPersons = async (): Promise<GetUnknownPersonsDTO[]> => {
     const unknownPersons = await UnknownIdentityModel.find({}, { representativeEmbedding: 0, createdAt: 0, updatedAt: 0 }).lean();
     const persons = unknownPersons.map((p) => {

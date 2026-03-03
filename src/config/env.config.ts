@@ -77,6 +77,10 @@ const envConfig: IEnv = {
     officeStartTime: officeTimeToMs(process.env.OFFICE_START_TIME!, "OFFICE_START_TIME"),
     officeEndTime: officeTimeToMs(process.env.OFFICE_END_TIME!, "OFFICE_END_TIME"),
 
+    // rtsp
+    rtspMaxRetries: 100,
+    rtspRetryDelay: parseDuration("30s" as StringValue, "RTSP_RETRY_DELAY")
+
 };
 
 export default envConfig;

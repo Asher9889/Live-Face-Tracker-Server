@@ -57,6 +57,10 @@ interface IEnv {
     // Office time
     officeStartTime: number;
     officeEndTime: number;
+
+    // rtsp retry
+    rtspRetryDelay:number;
+    rtspMaxRetries:number
 }
 
 
