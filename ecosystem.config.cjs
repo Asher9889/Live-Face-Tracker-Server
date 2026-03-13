@@ -42,8 +42,8 @@ module.exports = {
 
                 // ffmpef engine
                 FFMPEG_PATH: "C:\\ffmpeg\\ffmpeg-8.0.1-essentials_build\\bin\\ffmpeg.exe",
-		OFFICE_START_TIME: "09:00",
-		OFFICE_END_TIME: "21:00"
+                OFFICE_START_TIME: "09:00",
+                OFFICE_END_TIME: "21:00"
             }
         }
     ]

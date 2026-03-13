@@ -23,6 +23,14 @@ class UnknownController {
             return next(error);
         }
     }
+    findAllEmbeddings = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const embeddings = await unknownService.findAllEmbeddings();
+            return ApiResponse.success(res, "Unknown embeddings fetched successfully", embeddings, StatusCodes.OK, embeddings.length);
+        } catch (error) {
+            return next(error);
+        }
+    }
 }
     
 export default UnknownController;

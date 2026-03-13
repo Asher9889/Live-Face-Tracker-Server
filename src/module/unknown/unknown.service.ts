@@ -1,4 +1,4 @@
-import { CreateUnknownEventDTO, GetUnknownPersonsDTO } from "./unknown.types";
+import { CreateUnknownEventDTO, GetUnknownPersonsDTO, UnknownEmbeddingDTO } from "./unknown.types";
 import { v4 as uuidv4 } from "uuid";
 import { envConfig } from "../../config";
 import { EmbeddingBase } from "../shared/embedding/embedding.base";
@@ -114,6 +114,21 @@ class UnknownService {
 
   }
 
+  findAllEmbeddings = async (): Promise<UnknownEmbeddingDTO[]> => {
+    try {
+      const docs = await UnknownIdentityModel.find({ status: "unknown" },{ representativeEmbedding:1, representativeImageKey: 1, _id: 1 }).lean();
+      const data = docs.map(({_id, ...rest}) => {
+        return {
+          id: _id.toString(),
+          ...rest,
+        }
+      })
+      return data;
+    } catch (error) {
+      throw error;
+    }
+  }
+
   private uploadUnknownPersonImage = async (eventId: string, file: Express.Multer.File) => {
 
     const bucket = envConfig.minioEmployeeBucketName;
@@ -131,6 +146,7 @@ class UnknownService {
       curr.size > prev.size ? curr : prev
     );
   }
+
 
   findClosestIdentity(queryEmbedding: number[]): { id: string; score: number } | null {
 

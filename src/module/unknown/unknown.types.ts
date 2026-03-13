@@ -11,3 +11,9 @@ export interface GetUnknownPersonsDTO {
     lastSeen: number;
     status: string;
 }   
+
+export interface UnknownEmbeddingDTO {
+    id: string;
+    representativeEmbedding: number[];
+    representativeImageKey: string;
+}
