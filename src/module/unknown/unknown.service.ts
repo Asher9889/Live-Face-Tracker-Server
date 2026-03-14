@@ -114,7 +114,7 @@ class UnknownService {
 
   }
 
-  createUnknownIdentity = async ( identityData: CreateUnknownIdentityDTO, face: Express.Multer.File): Promise<{ identityId: string; imageKey: string }> => {
+  createUnknownIdentity = async ( identityData: CreateUnknownIdentityDTO, face: Express.Multer.File): Promise<{ unknownId: string; imageKey: string }> => {
     const { cameraCode, timestamp } = identityData;
     const representativeEmbedding = JSON.parse(identityData.representativeEmbedding);
 
@@ -131,7 +131,7 @@ class UnknownService {
       status: "unknown",
     });
 
-    return { identityId: newIdentity._id.toString(), imageKey };
+    return { unknownId: newIdentity._id.toString(), imageKey };
   };
 
 
