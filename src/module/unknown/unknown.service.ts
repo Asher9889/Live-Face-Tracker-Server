@@ -1,4 +1,4 @@
-import { CreateUnknownEventDTO, GetUnknownPersonsDTO, UnknownEmbeddingDTO } from "./unknown.types";
+import { CreateUnknownEventDTO, CreateUnknownIdentityDTO, GetUnknownPersonsDTO, UnknownEmbeddingDTO } from "./unknown.types";
 import { v4 as uuidv4 } from "uuid";
 import { envConfig } from "../../config";
 import { EmbeddingBase } from "../shared/embedding/embedding.base";
@@ -114,10 +114,31 @@ class UnknownService {
 
   }
 
+  createUnknownIdentity = async ( identityData: CreateUnknownIdentityDTO, face: Express.Multer.File): Promise<{ identityId: string; imageKey: string }> => {
+    const { cameraCode, timestamp } = identityData;
+    const representativeEmbedding = JSON.parse(identityData.representativeEmbedding);
+
+    const embeddingArray = representativeEmbedding.map(Number);
+
+    const imageKey = await this.uploadUnknownPersonImage(uuidv4(), face);
+
+    const newIdentity = await UnknownIdentityModel.create({
+      representativeEmbedding: embeddingArray,
+      representativeImageKey: imageKey,
+      eventCount: 1,
+      firstSeen: Number(timestamp),
+      lastSeen: Number(timestamp),
+      status: "unknown",
+    });
+
+    return { identityId: newIdentity._id.toString(), imageKey };
+  };
+
+
   findAllEmbeddings = async (): Promise<UnknownEmbeddingDTO[]> => {
     try {
-      const docs = await UnknownIdentityModel.find({ status: "unknown" },{ representativeEmbedding:1, representativeImageKey: 1, _id: 1 }).lean();
-      const data = docs.map(({_id, ...rest}) => {
+      const docs = await UnknownIdentityModel.find({ status: "unknown" }, { representativeEmbedding: 1, representativeImageKey: 1, _id: 1 }).lean();
+      const data = docs.map(({ _id, ...rest }) => {
         return {
           id: _id.toString(),
           ...rest,

@@ -1,8 +1,9 @@
 import { NextFunction, Request, Response } from "express";
-import { CreateUnknownEventDTO } from "./unknown.types";
+import { CreateUnknownEventDTO, CreateUnknownIdentityDTO } from "./unknown.types";
 import { unknownService } from "./unknown.module";
-import { ApiResponse } from "../../utils";
+import { ApiError, ApiResponse } from "../../utils";
 import { StatusCodes } from "http-status-codes";
+import { v4 as uuidv4 } from 'uuid';
 
 class UnknownController {
     async createUnknownEvent(req: Request, res: Response, next: NextFunction){
@@ -15,6 +16,22 @@ class UnknownController {
             return next(error);
         }
     }
+
+    async createUnknownIdentity(req: Request, res: Response, next: NextFunction){
+        try {
+            const { cameraCode, timestamp, representativeEmbedding } = req.body as CreateUnknownIdentityDTO;
+            const face = req.file;
+
+            if(!face) throw new ApiError(StatusCodes.BAD_REQUEST, "Face is required");
+            const data = await unknownService.createUnknownIdentity({ cameraCode, timestamp, representativeEmbedding }, face);
+
+            return ApiResponse.success(res, "Unknown identity created successfully", data);
+        } catch (error) {
+            return next(error);
+        }
+    }
+
+
     getUnknownPersons = async (req: Request, res: Response, next: NextFunction) => {
         try {
             const persons = await unknownService.getUnknownPersons();
