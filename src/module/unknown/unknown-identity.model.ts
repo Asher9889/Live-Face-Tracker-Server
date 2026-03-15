@@ -7,6 +7,7 @@ export interface IUnknownIdentity {
   representativeImageKey: string;
 
   eventCount: number;
+  embeddingCount: number;
 
   firstSeen: number;
   lastSeen: number;
@@ -32,6 +33,11 @@ const UnknownIdentitySchema = new mongoose.Schema<IUnknownIdentity>(
     eventCount: {
       type: Number,
       default: 1,
+    },
+
+    embeddingCount: {
+      type: Number,
+      default: 1
     },
 
     firstSeen: { type: Number, required: true },

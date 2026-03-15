@@ -3,7 +3,7 @@ import { Schema, model, Types } from "mongoose";
 export interface IUnknownEvent {
   eventId: string;
   cameraCode: string;
-  trackerId?: string;
+  // trackerId?: string;
   reason?: string;
 
   timestamp: number;
@@ -21,9 +21,9 @@ const UnknownEventSchema = new Schema<IUnknownEvent>(
     eventId: { type: String, required: true, unique: true },
 
     cameraCode: { type: String, required: true },
-    trackerId: { type: String },
+    // trackerId: { type: String, default: "" },
 
-    reason: { type: String },
+    reason: { type: String, default: "" },
 
     timestamp: { type: Number, required: true },
 

@@ -1,4 +1,4 @@
-import { CreateUnknownEventDTO, CreateUnknownIdentityDTO, GetUnknownPersonsDTO, UnknownEmbeddingDTO } from "./unknown.types";
+import { CreateUnknownEventDTO, CreateUnknownIdentityDTO, CreateUnknownPersonEventDTO, CreateUnknownPersonEventServiceDTO, GetUnknownPersonsDTO, UnknownEmbeddingDTO } from "./unknown.types";
 import { v4 as uuidv4 } from "uuid";
 import { envConfig } from "../../config";
 import { EmbeddingBase } from "../shared/embedding/embedding.base";
@@ -102,7 +102,7 @@ class UnknownService {
     await UnknownEventModel.create({
       eventId,
       cameraCode: camera_code,
-      trackerId: pid || tid,
+      // trackerId: pid || tid,
       reason,
       timestamp: Number(timestamp),
       identityId: identityDoc._id,
@@ -115,7 +115,7 @@ class UnknownService {
   }
 
   createUnknownIdentity = async ( identityData: CreateUnknownIdentityDTO, face: Express.Multer.File): Promise<{ unknownId: string; imageKey: string }> => {
-    const { cameraCode, timestamp } = identityData;
+    const { cameraCode, timestamp, embeddingCount } = identityData;
     const representativeEmbedding = JSON.parse(identityData.representativeEmbedding);
 
     const embeddingArray = representativeEmbedding.map(Number);
@@ -129,10 +129,36 @@ class UnknownService {
       firstSeen: Number(timestamp),
       lastSeen: Number(timestamp),
       status: "unknown",
+      embeddingCount: embeddingCount
     });
 
     return { unknownId: newIdentity._id.toString(), imageKey };
   };
+
+  createUnknownPersonEvent = async (eventData: CreateUnknownPersonEventServiceDTO, face: Express.Multer.File) => {
+    const eventId = uuidv4();
+    const { timestamp, cameraCode, unknownId, meanEmbedding } = eventData;
+    const imageKey = await this.uploadUnknownPersonImage(eventId, face);
+
+    const savedUnknown = await UnknownIdentityModel.findById(unknownId);
+    if(!savedUnknown) throw new ApiError(StatusCodes.NOT_FOUND, "Unknown identity not found");
+
+    savedUnknown.eventCount += 1;
+    savedUnknown.lastSeen = Number(timestamp);
+    await savedUnknown.save();
+
+    await UnknownEventModel.create({
+      eventId,
+      cameraCode,
+      identityId: unknownId,
+      timestamp: Number(timestamp),
+      imageKey,
+      meanEmbedding
+    });
+
+    return { eventId, unknownId };
+
+  }
 
 
   findAllEmbeddings = async (): Promise<UnknownEmbeddingDTO[]> => {
@@ -242,81 +268,3 @@ class UnknownService {
 }
 
 export default UnknownService;
-
-/**
- * [PRESENCE] Recovery done. Active users: 11
-eventData {
-  camera_code: 'exit_1',
-  pid: 'unknown_27',
-  reason: 'unknown',
-  tid: '27',
-  timestamp: '1770125501'
-}
-faces [
-  {
-    fieldname: 'face',
-    originalname: 'face_0.jpg',
-    encoding: '7bit',
-    mimetype: 'image/jpeg',
-    buffer: <Buffer ff d8 ff e0 00 10 4a 46 49 46 00 01 01 00 00 01 00 01 00 00 ff db 00 43 00 02 01 01 01 01 01 02 01 01 01 02 02 02 02 02 04 03 02 02 02 02 05 04 04 03 ... 3904 more bytes>,
-    size: 3954
-  },
-  {
-    fieldname: 'face',
-    originalname: 'face_1.jpg',
-    encoding: '7bit',
-    mimetype: 'image/jpeg',
-    buffer: <Buffer ff d8 ff e0 00 10 4a 46 49 46 00 01 01 00 00 01 00 01 00 00 ff db 00 43 00 02 01 01 01 01 01 02 01 01 01 02 02 02 02 02 04 03 02 02 02 02 05 04 04 03 ... 4379 more bytes>,
-    size: 4429
-  },
-  {
-    fieldname: 'face',
-    originalname: 'face_2.jpg',
-    encoding: '7bit',
-    mimetype: 'image/jpeg',
-    buffer: <Buffer ff d8 ff e0 00 10 4a 46 49 46 00 01 01 00 00 01 00 01 00 00 ff db 00 43 00 02 01 01 01 01 01 02 01 01 01 02 02 02 02 02 04 03 02 02 02 02 05 04 04 03 ... 5363 more bytes>,
-    size: 5413
-  },
-  {
-    fieldname: 'face',
-    originalname: 'face_3.jpg',
-    encoding: '7bit',
-    mimetype: 'image/jpeg',
-    buffer: <Buffer ff d8 ff e0 00 10 4a 46 49 46 00 01 01 00 00 01 00 01 00 00 ff db 00 43 00 02 01 01 01 01 01 02 01 01 01 02 02 02 02 02 04 03 02 02 02 02 05 04 04 03 ... 3904 more bytes>,
-    size: 3954
-  },
-  {
-    fieldname: 'face',
-    originalname: 'face_4.jpg',
-    encoding: '7bit',
-    mimetype: 'image/jpeg',
-    buffer: <Buffer ff d8 ff e0 00 10 4a 46 49 46 00 01 01 00 00 01 00 01 00 00 ff db 00 43 00 02 01 01 01 01 01 02 01 01 01 02 02 02 02 02 04 03 02 02 02 02 05 04 04 03 ... 4379 more bytes>,
-    size: 4429
-  },
-  {
-    fieldname: 'face',
-    originalname: 'face_5.jpg',
-    encoding: '7bit',
-    mimetype: 'image/jpeg',
-    buffer: <Buffer ff d8 ff e0 00 10 4a 46 49 46 00 01 01 00 00 01 00 01 00 00 ff db 00 43 00 02 01 01 01 01 01 02 01 01 01 02 02 02 02 02 04 03 02 02 02 02 05 04 04 03 ... 5148 more bytes>,
-    size: 5198
-  },
-  {
-    fieldname: 'face',
-    originalname: 'face_6.jpg',
-    encoding: '7bit',
-    mimetype: 'image/jpeg',
-    buffer: <Buffer ff d8 ff e0 00 10 4a 46 49 46 00 01 01 00 00 01 00 01 00 00 ff db 00 43 00 02 01 01 01 01 01 02 01 01 01 02 02 02 02 02 04 03 02 02 02 02 05 04 04 03 ... 5307 more bytes>,
-    size: 5357
-  },
-  {
-    fieldname: 'face',
-    originalname: 'face_7.jpg',
-    encoding: '7bit',
-    mimetype: 'image/jpeg',
-    buffer: <Buffer ff d8 ff e0 00 10 4a 46 49 46 00 01 01 00 00 01 00 01 00 00 ff db 00 43 00 02 01 01 01 01 01 02 01 01 01 02 02 02 02 02 04 03 02 02 02 02 05 04 04 03 ... 5363 more bytes>,
-    size: 5413
-  }
-]
-
- */

@@ -1,5 +1,5 @@
 import { NextFunction, Request, Response } from "express";
-import { CreateUnknownEventDTO, CreateUnknownIdentityDTO } from "./unknown.types";
+import { CreateUnknownEventDTO, CreateUnknownIdentityDTO, CreateUnknownPersonEventDTO } from "./unknown.types";
 import { unknownService } from "./unknown.module";
 import { ApiError, ApiResponse } from "../../utils";
 import { StatusCodes } from "http-status-codes";
@@ -17,13 +17,28 @@ class UnknownController {
         }
     }
 
+    async createUnknownPersonEvents(req: Request, res: Response, next: NextFunction){
+        try {
+            const { cameraCode, timestamp, unknownId, meanEmbedding } = req.body as CreateUnknownPersonEventDTO;
+            const parsedEmbedding = JSON.parse(meanEmbedding) as number[];
+            const face = req.file;
+            
+            if(!face) throw new ApiError(StatusCodes.BAD_REQUEST, "Face is required");
+            const data = await unknownService.createUnknownPersonEvent({ cameraCode, timestamp, unknownId, meanEmbedding: parsedEmbedding }, face);
+            
+            return ApiResponse.success(res, "Unknown person event created successfully", data);
+        } catch (error) {
+            return next(error);
+        }
+    }
+
     async createUnknownIdentity(req: Request, res: Response, next: NextFunction){
         try {
-            const { cameraCode, timestamp, representativeEmbedding } = req.body as CreateUnknownIdentityDTO;
+            const { cameraCode, timestamp, representativeEmbedding, embeddingCount } = req.body as CreateUnknownIdentityDTO;
             const face = req.file;
 
             if(!face) throw new ApiError(StatusCodes.BAD_REQUEST, "Face is required");
-            const data = await unknownService.createUnknownIdentity({ cameraCode, timestamp, representativeEmbedding }, face);
+            const data = await unknownService.createUnknownIdentity({ cameraCode, timestamp, representativeEmbedding, embeddingCount }, face);
 
             return ApiResponse.success(res, "Unknown identity created successfully", data);
         } catch (error) {

@@ -11,8 +11,16 @@ const createUnknownEventSchema = zod.object({
 const createUnknownIdentityDTO = zod.object({
     cameraCode: zod.string(),
     representativeEmbedding: zod.string(),
-    timestamp: zod.string()
+    timestamp: zod.string(),
+    embeddingCount: zod.number()
+})
+
+const createUnknownPersonEventSchema = zod.object({
+    cameraCode: zod.string(),
+    timestamp: zod.string(),
+    unknownId: zod.string(),
+    meanEmbedding: zod.string()
 })
 
 export default createUnknownEventSchema;
-export { createUnknownIdentityDTO };
+export { createUnknownIdentityDTO, createUnknownPersonEventSchema };
