@@ -129,7 +129,7 @@ class UnknownService {
       firstSeen: Number(timestamp),
       lastSeen: Number(timestamp),
       status: "unknown",
-      embeddingCount: embeddingCount
+      embeddingCount: Number(embeddingCount)
     });
 
     return { unknownId: newIdentity._id.toString(), imageKey };

@@ -12,7 +12,7 @@ const createUnknownIdentityDTO = zod.object({
     cameraCode: zod.string(),
     representativeEmbedding: zod.string(),
     timestamp: zod.string(),
-    embeddingCount: zod.number()
+    embeddingCount: zod.string()
 })
 
 const createUnknownPersonEventSchema = zod.object({
