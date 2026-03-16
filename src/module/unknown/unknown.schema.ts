@@ -20,9 +20,7 @@ const createUnknownPersonEventSchema = zod.object({
     unknownId: zod.string(),
 
     timestamp: zod.string().transform((val) => Number(val)),
-    meanEmbedding: zod.string().transform((val) => JSON.parse(val)).refine((arr) => Array.isArray(arr), {
-      message: "meanEmbedding must be an array"
-    }),
+    meanEmbedding: zod.string().transform((val) => JSON.parse(val)).pipe(zod.array(zod.number())),
 })
 
 export default createUnknownEventSchema;
