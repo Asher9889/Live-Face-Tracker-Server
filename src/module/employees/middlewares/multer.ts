@@ -41,10 +41,24 @@ export function multerErrorHandler(err: any, req: Request, res: Response, next: 
     if (err.code === "LIMIT_UNEXPECTED_FILE") {
       return next(
         new ApiError(StatusCodes.BAD_REQUEST, "Unexpected file field", [
-          { field: err.field, message: "Please send files under 'faces' field name" }
+          { field: err.field, message: "Please send file under 'faces' field name" }
         ])
       );
     }
+
+    if (err.code === "LIMIT_FILE_SIZE") {
+      return next(
+        new ApiError(StatusCodes.BAD_REQUEST, "File too large", [
+          { field: "face", message: `Max file size allowed is ${envConfig.employeeImageMaxSize}MB` }
+        ])
+      );
+    }
+
+    return next(
+      new ApiError(StatusCodes.BAD_REQUEST, "File upload error", [
+        { field: "face", message: err.message }
+      ])
+    );
 
     // File too large, too many files, etc.
     return next(

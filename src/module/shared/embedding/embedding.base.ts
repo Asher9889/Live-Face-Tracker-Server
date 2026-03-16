@@ -29,7 +29,7 @@ export abstract class EmbeddingBase {
       return response.data as IEmbeddingBase; // assume API returns embeddings array
     } catch (err: any) {
       console.log("error is:", err)
-        throw new ApiError(StatusCodes.BAD_REQUEST, err.messages);
+      throw new ApiError(StatusCodes.BAD_REQUEST, err.messages);
     }
   }
 }
