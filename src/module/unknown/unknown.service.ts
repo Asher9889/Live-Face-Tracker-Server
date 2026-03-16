@@ -144,14 +144,14 @@ class UnknownService {
     if(!savedUnknown) throw new ApiError(StatusCodes.NOT_FOUND, "Unknown identity not found");
 
     savedUnknown.eventCount += 1;
-    savedUnknown.lastSeen = Number(timestamp);
+    savedUnknown.lastSeen = timestamp;
     await savedUnknown.save();
 
     await UnknownEventModel.create({
       eventId,
       cameraCode,
       identityId: unknownId,
-      timestamp: Number(timestamp),
+      timestamp: timestamp,
       imageKey,
       meanEmbedding
     });

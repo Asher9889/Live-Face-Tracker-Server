@@ -8,7 +8,7 @@ export type CreateUnknownPersonEventDTO = zod.infer<typeof createUnknownPersonEv
 
 export type CreateUnknownPersonEventServiceDTO = {
   cameraCode: string
-  timestamp: string
+  timestamp: number
   unknownId: string
   meanEmbedding: number[]
 }
