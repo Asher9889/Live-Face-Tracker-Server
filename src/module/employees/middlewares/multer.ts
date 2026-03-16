@@ -17,7 +17,7 @@ const uploadFaces = multer({
       cb(new Error("Invalid file type")); // reject file
     }
   },
-}).array("face", envConfig.employeeImageMaxCount);
+}).array("faces", envConfig.employeeImageMaxCount);
 
 export const uploadFace = multer({
   storage: multer.memoryStorage(),
