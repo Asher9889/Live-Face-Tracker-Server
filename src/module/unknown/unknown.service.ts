@@ -163,7 +163,7 @@ class UnknownService {
 
   findAllEmbeddings = async (): Promise<UnknownEmbeddingDTO[]> => {
     try {
-      const docs = await UnknownIdentityModel.find({ status: "unknown" }, { representativeEmbedding: 1, representativeImageKey: 1, _id: 1 }).lean();
+      const docs = await UnknownIdentityModel.find({ status: "unknown" }, { representativeEmbedding: 1, representativeImageKey: 1, embeddingCount: 1, _id: 1 }).lean();
       const data = docs.map(({ _id, ...rest }) => {
         return {
           id: _id.toString(),
