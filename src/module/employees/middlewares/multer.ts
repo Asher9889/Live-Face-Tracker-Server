@@ -17,7 +17,7 @@ const uploadFaces = multer({
       cb(new Error("Invalid file type")); // reject file
     }
   },
-}).array("faces", envConfig.employeeImageMaxCount);
+}).array("face", envConfig.employeeImageMaxCount);
 
 export const uploadFace = multer({
   storage: multer.memoryStorage(),
@@ -41,7 +41,7 @@ export function multerErrorHandler(err: any, req: Request, res: Response, next: 
     if (err.code === "LIMIT_UNEXPECTED_FILE") {
       return next(
         new ApiError(StatusCodes.BAD_REQUEST, "Unexpected file field", [
-          { field: err.field, message: "Please send file under 'faces' field name" }
+          { field: err.field, message: "Please send file under 'face' field name" }
         ])
       );
     }
