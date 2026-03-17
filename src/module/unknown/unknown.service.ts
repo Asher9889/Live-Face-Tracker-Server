@@ -146,6 +146,8 @@ class UnknownService {
     savedUnknown.eventCount += 1;
     savedUnknown.lastSeen = timestamp;
     await savedUnknown.save();
+    console.log("meanEmbedding.length", meanEmbedding.length);
+    console.log("typeof meanEmbedding", typeof meanEmbedding);
 
     await UnknownEventModel.create({
       eventId,
