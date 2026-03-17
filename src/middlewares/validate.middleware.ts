@@ -12,6 +12,7 @@ export const validate = (schema: ZodObject) => (req: Request, res: Response, nex
         const errors = result.error.issues.map((error) => ({ field: error.path[0], message: error.message }))
         throw new ApiError(StatusCodes.BAD_REQUEST, "Please provide valid data", errors);
     }
+    req.body = result.data;
     next();
 };
 
