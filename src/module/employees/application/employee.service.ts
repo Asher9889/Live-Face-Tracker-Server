@@ -124,12 +124,16 @@ export class EmployeeService {
 
     await UnknownIdentityModel.findByIdAndUpdate(dto.unknownId, { status: "converted" });
 
-    await axios.post(envConfig.unknownMatchWithExistingApiUrl, {
+    const promoted = await axios.post(envConfig.unknownPromoteApiUrl, {
       unknownId: dto.unknownId,
       employeeId: employee._id.toString(),
       employeeName: dto.name,
       embedding: unknown?.representativeEmbedding
     });
+
+    if(!promoted.data.success) {
+      throw new ApiError(StatusCodes.INTERNAL_SERVER_ERROR, "Failed to promote unknown to employee");
+    }
 
     return employee;
   }
