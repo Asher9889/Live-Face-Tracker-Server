@@ -48,7 +48,7 @@ const PresenceLogSchema = new Schema<IPresenceLog>(
       default: "face_recognition",
     },
 
-    confidence: { type: Number, min: 0, max: 1 },
+    confidence: { type: Number, min: 0, max: 100 },
 
     note: { type: String },
   },
