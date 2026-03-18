@@ -1,7 +1,7 @@
 import express from "express";
 import uploadFaces, { multerErrorHandler, multerSingleFaceErrorHandler, uploadFace } from "../employees/middlewares/multer";
 import { unknownController } from "./unknown.module";
-import createUnknownSchema, { createUnknownIdentityDTO, createUnknownPersonEventSchema } from "./unknown.schema";
+import createUnknownSchema, { createUnknownIdentityDTO, createUnknownPersonEventSchema, mergeUnknownSchema } from "./unknown.schema";
 import { validate } from "../../middlewares/validate.middleware";
 
 const router = express.Router();
@@ -14,5 +14,8 @@ router.post("/", uploadFace, multerSingleFaceErrorHandler, validate(createUnknow
 router.get("/persons", unknownController.getUnknownPersons);
 
 router.get("/embeddings", unknownController.findAllEmbeddings);
+
+// merge unknown
+router.post("/merge", validate(mergeUnknownSchema), unknownController.mergeUnknown)
 
 export default router;

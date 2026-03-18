@@ -1,9 +1,11 @@
 import { NextFunction, Request, Response } from "express";
-import { CreateUnknownEventDTO, CreateUnknownIdentityDTO, CreateUnknownPersonEventDTO } from "./unknown.types";
+import { CreateUnknownEventDTO, CreateUnknownIdentityDTO, CreateUnknownPersonEventDTO, MergeUnknownDTO } from "./unknown.types";
 import { unknownService } from "./unknown.module";
 import { ApiError, ApiResponse } from "../../utils";
 import { StatusCodes } from "http-status-codes";
 import { v4 as uuidv4 } from 'uuid';
+import { UnknownIdentityModel } from "./unknown-identity.model";
+import axios from "axios";
 
 class UnknownController {
     async createUnknownEvent(req: Request, res: Response, next: NextFunction){
@@ -45,7 +47,6 @@ class UnknownController {
         }
     }
 
-
     getUnknownPersons = async (req: Request, res: Response, next: NextFunction) => {
         try {
             const persons = await unknownService.getUnknownPersons();
@@ -54,6 +55,7 @@ class UnknownController {
             return next(error);
         }
     }
+
     findAllEmbeddings = async (req: Request, res: Response, next: NextFunction) => {
         try {
             const embeddings = await unknownService.findAllEmbeddings();
@@ -62,6 +64,34 @@ class UnknownController {
             return next(error);
         }
     }
+    
+    mergeUnknown = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const { sourceIds } = req.body as MergeUnknownDTO;
+            console.log("Source", sourceIds)
+            const ids = sourceIds;
+              
+                const identities = await UnknownIdentityModel.find({
+                  _id: { $in: ids }
+                });
+              
+                const embeddings = identities.map(i => i.representativeEmbedding);
+                const counts = identities.map(i => i.embeddingCount);
+              
+                const ress = await axios.post("http://localhost:4001/merge", {
+                  embeddings,
+                  counts
+                });
+              
+                console.log(ress.data);
+            // const data = await unknownService.mergeUnknown(sourceIds);
+            return ApiResponse.success(res, "Unknown merged successfully", ress.data.message);
+        } catch (error) {
+            return next(error);
+        }
+    }
+
+   
 }
     
 export default UnknownController;

@@ -1,4 +1,4 @@
-import { CreateUnknownEventDTO, CreateUnknownIdentityDTO, CreateUnknownPersonEventDTO, CreateUnknownPersonEventServiceDTO, GetUnknownPersonsDTO, UnknownEmbeddingDTO } from "./unknown.types";
+import { CreateUnknownEventDTO, CreateUnknownIdentityDTO, CreateUnknownPersonEventDTO, CreateUnknownPersonEventServiceDTO, GetUnknownPersonsDTO, MergeUnknownDTO, UnknownEmbeddingDTO } from "./unknown.types";
 import { v4 as uuidv4 } from "uuid";
 import { envConfig } from "../../config";
 import { EmbeddingBase } from "../shared/embedding/embedding.base";
@@ -160,7 +160,6 @@ class UnknownService {
 
   }
 
-
   findAllEmbeddings = async (): Promise<UnknownEmbeddingDTO[]> => {
     try {
       const docs = await UnknownIdentityModel.find({ status: "unknown" }, { representativeEmbedding: 1, representativeImageKey: 1, embeddingCount: 1, _id: 1 }).lean();
@@ -175,6 +174,42 @@ class UnknownService {
       throw error;
     }
   }
+
+  // mergeUnknown = async ({ sourceIds }: MergeUnknownDTO) => {
+  //   const identities = await UnknownIdentityModel.find({ _id: { $in: sourceIds }}).lean();
+  //   const primaryIdentity = identities.reduce((prev, curr) => {
+  //     if (curr.embeddingCount > prev.embeddingCount) return curr;
+  //     if (curr.embeddingCount === prev.embeddingCount) {
+  //       return curr.lastSeen > prev.lastSeen ? curr : prev;
+  //     }
+  //     return prev;
+  //   })
+  //   const embeddings = identities.map(i => i.representativeEmbedding);
+  //   const counts = identities.map(i => i.embeddingCount);
+
+  //   const response = await axios.post(`${env.FASTAPI_URL}/merge`,{ embeddings, counts });
+
+  //   const { mergedEmbedding, totalCount } = response.data;
+
+  //   await UnknownIdentityModel.findByIdAndUpdate(primaryIdentity._id, {
+  //     meanEmbedding: mergedEmbedding,
+  //     embeddingCount: totalCount,
+  //     lastSeen: Math.max(...identities.map(i => i.lastSeen))
+  //   });
+
+  //   const otherIds = sourceIds.filter(id => id !== primaryIdentity._id.toString());
+
+  //   await UnknownEventModel.updateMany(
+  //     { identityId: { $in: otherIds } },
+  //     { $set: { identityId: primaryIdentity._id } }
+  //   );
+
+  //   await UnknownIdentityModel.deleteMany({
+  //     _id: { $in: otherIds }
+  //   });
+
+  //   console.log({ primaryIdentity, embeddings, counts });
+  // }
 
   private uploadUnknownPersonImage = async (eventId: string, file: Express.Multer.File) => {
 
@@ -193,7 +228,6 @@ class UnknownService {
       curr.size > prev.size ? curr : prev
     );
   }
-
 
   findClosestIdentity(queryEmbedding: number[]): { id: string; score: number } | null {
 

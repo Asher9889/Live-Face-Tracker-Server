@@ -5,6 +5,7 @@ import { StatusCodes } from "http-status-codes";
 import { CreateEmployeeDTO, EmployeeQueryDTO } from "../application/dtos/CreateEmployeeDTO";
 import { employeeService } from "../../shared/minio/minio.client";
 import { CustomRequest } from "../../../types/express";
+import { TCreateEmployeeFromUnknownDTO } from "../validations/employee.schema";
 
 export default class EmployeeController {
     private employeeService: EmployeeService;
@@ -42,7 +43,7 @@ export default class EmployeeController {
                 throw new ApiError(StatusCodes.BAD_REQUEST, "validatedQuery missing", [{ field: "limit", message: "limit is required" }]);
             }
             const { data, hasMore, cursor } = await this.employeeService.findAllEmployees(req.validatedQuery);
-            return ApiResponse.success(res, "Employees fetched successfully", {data, hasMore, cursor, count: data.length}, StatusCodes.OK);
+            return ApiResponse.success(res, "Employees fetched successfully", { data, hasMore, cursor, count: data.length }, StatusCodes.OK);
         } catch (error) {
             return next(error);
         }
@@ -54,6 +55,20 @@ export default class EmployeeController {
             return ApiResponse.success(res, "Embeddings fetched successfully", embeddings, StatusCodes.OK)
         } catch (error) {
             console.log("error is:", error)
+            return next(error);
+        }
+    }
+
+    createEmployeeFromUnknown = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const payload = req.body as TCreateEmployeeFromUnknownDTO;
+            const file = req.file;
+            if (!file) {
+                throw new ApiError(400, "At least one face image is required");
+            }
+            const data = await employeeService.createEmployeeFromUnknown(payload, file);
+            return ApiResponse.success(res, "Unknown converted to employee successfully", data);
+        } catch (error) {
             return next(error);
         }
     }

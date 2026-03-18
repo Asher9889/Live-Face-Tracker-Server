@@ -51,6 +51,8 @@ const envConfig: IEnv = {
 
     // embedding
     embeddingApiUrl: process.env.EMBEDDING_API_URL!!,
+    unknownMatchWithExistingApiUrl: process.env.UNKNOWN_MATCH_WITH_EXISTING_API_URL!,
+    unknownPromoteApiUrl: process.env.UNKNOWN_PROMOTE_API_URL!,
 
     // Redis
     redisHost: process.env.REDIS_HOST!!,

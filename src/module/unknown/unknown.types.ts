@@ -1,10 +1,11 @@
 import zod from "zod";
-import createUnknownSchema, { createUnknownPersonEventSchema } from "./unknown.schema";
+import createUnknownSchema, { createUnknownPersonEventSchema, mergeUnknownSchema } from "./unknown.schema";
 import { createUnknownIdentityDTO } from "./unknown.schema";
 
 export type CreateUnknownEventDTO = zod.infer<typeof createUnknownSchema>;
 export type CreateUnknownIdentityDTO = zod.infer<typeof createUnknownIdentityDTO>;
 export type CreateUnknownPersonEventDTO = zod.infer<typeof createUnknownPersonEventSchema>
+export type MergeUnknownDTO = zod.infer<typeof mergeUnknownSchema>
 
 export type CreateUnknownPersonEventServiceDTO = {
   cameraCode: string

@@ -9,6 +9,10 @@ import { EmployeeMinioService } from "../infrastructure/employess.minio.service"
 import { envConfig } from "../../../config";
 import { EventBus, EventNames } from "../../../events";
 import { ObjectId } from "mongodb";
+import { TCreateEmployeeFromUnknownDTO } from "../validations/employee.schema";
+import { UnknownIdentityModel } from "../../unknown/unknown-identity.model";
+import EmployeeModel from "../infrastructure/employee.model";
+import axios from "axios";
 
 export class EmployeeService {
   private embeddingService: EmployeeEmbeddingService;
@@ -84,5 +88,49 @@ export class EmployeeService {
 
   async findAllEmbeddings() {
     return this.repo.findAllEmbeddings();
+  }
+
+  async createEmployeeFromUnknown(dto: TCreateEmployeeFromUnknownDTO, file: Express.Multer.File){
+    const unknown = await UnknownIdentityModel.findById(dto.unknownId).lean();
+
+    
+    if(!unknown) { 
+      throw new ApiError(StatusCodes.NOT_FOUND, "Unknown identity not found", [{ field: "unknownId", message: "Unknown identity not found" }]);
+    }
+    if (unknown.status === "converted") {
+      throw new ApiError(StatusCodes.BAD_REQUEST, "Already converted");
+    }
+
+    // check is employee registered with same embeddings?
+    const isMatch = await axios.post(envConfig.unknownMatchWithExistingApiUrl, {
+      embedding: unknown?.representativeEmbedding,
+      threshold: 0.35
+    });
+
+    if(isMatch.data.isDuplicate){
+      throw new ApiError(StatusCodes.BAD_REQUEST, "Employee with same embeddings already exists", isMatch.data);
+    }
+
+    const uploadedKeys = await this.employeeMinioService.uploadEmployeeImages(dto.name, [file]);
+
+    const employee = await EmployeeModel.create({
+      name: dto.name,
+      email: dto.email,
+      department: dto.department,
+      role: dto.role,
+      faceImages: uploadedKeys,
+      meanEmbedding: unknown.representativeEmbedding,
+    });
+
+    await UnknownIdentityModel.findByIdAndUpdate(dto.unknownId, { status: "converted" });
+
+    await axios.post(envConfig.unknownMatchWithExistingApiUrl, {
+      unknownId: dto.unknownId,
+      employeeId: employee._id.toString(),
+      employeeName: dto.name,
+      embedding: unknown?.representativeEmbedding
+    });
+
+    return employee;
   }
 }

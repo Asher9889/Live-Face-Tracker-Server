@@ -31,6 +31,8 @@ interface IEnv {
 
     //
     embeddingApiUrl: string;
+    unknownMatchWithExistingApiUrl: string
+    unknownPromoteApiUrl: string
 
     // redis
     redisHost: string;

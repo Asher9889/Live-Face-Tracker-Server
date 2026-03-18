@@ -23,5 +23,12 @@ const createUnknownPersonEventSchema = zod.object({
     meanEmbedding: zod.string().transform((val) => JSON.parse(val)).pipe(zod.array(zod.number())),
 })
 
+const mergeUnknownSchema = zod.object({
+  sourceIds: zod
+    .array(zod.string().min(1))
+    .min(2, "At least 2 identities required"),
+});
+
+
 export default createUnknownEventSchema;
-export { createUnknownIdentityDTO, createUnknownPersonEventSchema };
+export { createUnknownIdentityDTO, createUnknownPersonEventSchema, mergeUnknownSchema };
