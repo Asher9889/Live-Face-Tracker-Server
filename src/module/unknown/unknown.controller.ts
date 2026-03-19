@@ -82,8 +82,18 @@ class UnknownController {
                   embeddings,
                   counts
                 });
-              
+                /**
+                 * {
+                    status: 'error',
+                    message: 'Embeddings too different (similarity=0.330)'
+                    }
+                 */
+
                 console.log(ress.data);
+                if(ress.data.status === "error") {
+                   throw new ApiError(StatusCodes.BAD_REQUEST, `Do not merge. ${ress.data.message}`);
+                } 
+              
             // const data = await unknownService.mergeUnknown(sourceIds);
             return ApiResponse.success(res, "Unknown merged successfully", ress.data.message);
         } catch (error) {
