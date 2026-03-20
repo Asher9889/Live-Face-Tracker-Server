@@ -129,6 +129,7 @@ class UnknownService {
       firstSeen: Number(timestamp),
       lastSeen: Number(timestamp),
       status: "unknown",
+      cameraCode,
       embeddingCount: Number(embeddingCount)
     });
 

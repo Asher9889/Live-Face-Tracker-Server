@@ -13,6 +13,7 @@ export interface IUnknownIdentity {
   lastSeen: number;
 
   status: IdentityStatus;
+  cameraCode: string;
 
   createdAt: Date;
   updatedAt: Date;
@@ -49,6 +50,10 @@ const UnknownIdentitySchema = new mongoose.Schema<IUnknownIdentity>(
       default: "unknown",
       index: true,
     },
+    cameraCode: {
+      type: String,
+      required: true,
+    }
   },
   {
     timestamps: true, versionKey: false
