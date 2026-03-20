@@ -26,7 +26,7 @@ export default class IdentityCacheService {
 
         this.isLoaded = true;
 
-        console.log(`[IdentityCache] Loaded ${this.cache.length} identities`);
+        console.log(`[UnknownIdentityCache] Loaded ${this.cache.length} identities`);
     }
 
     getAll() {
