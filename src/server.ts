@@ -12,6 +12,9 @@ import { initEventHandlers } from "./events/Event";
 import loadCameraConfigsToRedis from "./module/cameras/infrastructure/camera.cache";
 import { presenceController } from "./module/presence/presence.module";
 import cookieParser from "cookie-parser";
+import PinoHttp from "pino-http";
+
+const Pinologger = PinoHttp();
 
 connectMongoDB();
 connectRedis();
@@ -34,6 +37,8 @@ app.use(cors({
     },
     credentials: true
 }));
+
+app.use(Pinologger); 
 
 initEventHandlers(); // for internal event_emitter 
 initWSSStreaming(server);
