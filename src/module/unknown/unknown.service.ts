@@ -116,6 +116,7 @@ class UnknownService {
 
   createUnknownIdentity = async ( identityData: CreateUnknownIdentityDTO, face: Express.Multer.File): Promise<{ unknownId: string; imageKey: string }> => {
     const { cameraCode, timestamp, embeddingCount } = identityData;
+    console.log("Creating unknown identity with data:", identityData);
     const representativeEmbedding = JSON.parse(identityData.representativeEmbedding);
 
     const embeddingArray = representativeEmbedding.map(Number);
