@@ -1,9 +1,10 @@
-import { type TGateType } from "../../domain/camera.constant";
+import { type TGateType, TCameraRole } from "../../domain/camera.constant";
 
 export interface CreateCameraDTO {
-
+  id: string;
   name: string; // "Entry Gate 1",
-  code: string;  // "entry_1",                        
+  code: string;  // "entry_1",   
+  role: TCameraRole                     
 
   gateType: TGateType; // // ENTRY | EXIT | BOTH | VISITOR
   location: string; // "Main Entrance"  human-readable location

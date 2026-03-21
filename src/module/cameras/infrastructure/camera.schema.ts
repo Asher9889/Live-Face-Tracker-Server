@@ -1,11 +1,13 @@
 import { z } from "zod";
-import { GATE_TYPE } from "../domain/camera.constant";
+import { CAMERA_ROLE, GATE_TYPE } from "../domain/camera.constant";
 
 export const cameraSchema = z.object({
   name: z.string().min(4, "Camera name is required"),
   code: z.string().min(4, "Camera code is required"),
+  role: z.enum(Object.values(CAMERA_ROLE)),
 
   gateType: z.enum(Object.values(GATE_TYPE)),
+
 
   location: z.string().min(4, "Location is required"),
 

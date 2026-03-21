@@ -1,8 +1,10 @@
-import type { TGateType } from "./camera.constant";
+import type { TCameraRole, TGateType } from "./camera.constant";
 
 export interface ICameraProps {
+  id: string;
   name: string;
   code: string;
+  role: TCameraRole;
 
   gateType: TGateType;
   location: string;
@@ -41,6 +43,8 @@ export default class Camera {
   constructor(props: ICameraProps) {
     this.props = {
       ...props,
+      role: props.role,
+      gateType: props.gateType,
       credentials: props.credentials ?? { username: null, password: null },
 
       streamConfig: props.streamConfig ?? {

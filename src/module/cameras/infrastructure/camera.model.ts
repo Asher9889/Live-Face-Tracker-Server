@@ -1,12 +1,18 @@
 import { Schema, model, type Document } from "mongoose";
-import { GATE_TYPE } from "../domain/camera.constant";
+import { CAMERA_ROLE, GATE_TYPE } from "../domain/camera.constant";
 import Camera  from "../domain/camera.entity";
 
-const CameraSchema = new Schema<Camera & Document>(
+const CameraSchema = new Schema(
   {
     name: { type: String, required: true },
 
     code: { type: String, required: true},
+    
+    role: {
+      type: String,
+      enum: Object.values(CAMERA_ROLE),
+      required: true,
+    },
 
     gateType: {
       type: String,
@@ -67,11 +73,11 @@ const CameraSchema = new Schema<Camera & Document>(
   }
 );
 
-CameraSchema.pre("save", function () {
-    if (!this.id) {
-        this.id = this._id.toString();
-    }
-});
+// CameraSchema.pre("save", function () {
+//     if (!this.id) {
+//         this.id = this._id.toString();
+//     }
+// });
 
 // ---------------- Indexes ----------------
 
