@@ -216,3 +216,11 @@ Camera → AI Worker → Unknown Identity
 ```
 
 ---
+
+# Camera Behaviour
+| Role        | Responsibility                    |
+| ----------- | --------------------------------- |
+| **REGISTER**   | create unknown                    |
+| **ASSIST**  | help improve/update unknown       |
+| **OBSERVE** | only track (no identity creation) |
+
