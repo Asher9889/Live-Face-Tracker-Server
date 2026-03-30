@@ -95,7 +95,7 @@ class UnknownController {
                 } 
               
             // const data = await unknownService.mergeUnknown(sourceIds);
-            return ApiResponse.success(res, "Unknown merged successfully", ress.data.message);
+            return ApiResponse.success(res, "Unknown merged successfully", ress.data);
         } catch (error) {
             return next(error);
         }
