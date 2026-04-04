@@ -42,6 +42,8 @@ const envConfig: IEnv = {
     // Multer Employee
     employeeImageMaxCount: Number(process.env.EMPLOYEE_IMAGE_MAX_COUNT),
     employeeImageMaxSize: Number(process.env.EMPLOYEE_IMAGE_MAX_SIZE),
+    unknownImageMaxCount: Number(process.env.UNKNOWN_IMAGE_MAX_COUNT),
+    unknownImageMaxSize: Number(process.env.UNKNOWN_IMAGE_MAX_SIZE),
 
     //minio
     minioEndpoint: process.env.MINIO_ENDPOINT!!,

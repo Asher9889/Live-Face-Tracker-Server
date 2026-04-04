@@ -4,6 +4,6 @@ import routeNotExistsHandler from "./global-error-handler/routeNotExistsHandler"
 import globalErrorHandler from "./global-error-handler/globalErrorHandler";
 import parseDuration from "./parseDuration";
 import miliSecondsToISoDate, { todayDate } from "./miliSecondsToISoDate";
-todayDate
+import createHttpLogger from "./logger/pino.logger";
 
-export { todayDate, parseDuration, miliSecondsToISoDate, ApiError, ApiResponse, routeNotExistsHandler, globalErrorHandler };
+export { createHttpLogger, todayDate, parseDuration, miliSecondsToISoDate, ApiError, ApiResponse, routeNotExistsHandler, globalErrorHandler };

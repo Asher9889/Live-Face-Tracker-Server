@@ -6,6 +6,7 @@ import { AttendanceEventsQueryDTO, AttendenceQueryDTO } from "../module/attendan
 import { CustomRequest } from "../types/express";
 
 export const validate = (schema: ZodObject) => (req: Request, res: Response, next: NextFunction) => {
+
     const result = schema.safeParse(req.body);
 
     if (!result.success) {

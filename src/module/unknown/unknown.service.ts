@@ -1,4 +1,4 @@
-import { CreateUnknownEventDTO, CreateUnknownIdentityDTO, CreateUnknownPersonEventDTO, CreateUnknownPersonEventServiceDTO, GetUnknownPersonsDTO, MergeUnknownDTO, UnknownEmbeddingDTO } from "./unknown.types";
+import { CreateUnknownEventDTO, CreateUnknownIdentityDTO, CreateUnknownPersonEventDTO, CreateUnknownPersonEventServiceDTO, CreateUnknownSchemaDTO, GetUnknownPersonsDTO, MergeUnknownDTO, PoseData, PoseKey, PoseMap, UnknownEmbeddingDTO, updateUnknownSchemaDTO } from "./unknown.types";
 import { v4 as uuidv4 } from "uuid";
 import { envConfig } from "../../config";
 import { EmbeddingBase } from "../shared/embedding/embedding.base";
@@ -114,27 +114,342 @@ class UnknownService {
 
   }
 
-  createUnknownIdentity = async ( identityData: CreateUnknownIdentityDTO, face: Express.Multer.File): Promise<{ unknownId: string; imageKey: string }> => {
-    const { cameraCode, timestamp, embeddingCount } = identityData;
-    console.log("Creating unknown identity with data:", identityData);
-    const representativeEmbedding = JSON.parse(identityData.representativeEmbedding);
+  createUnknownIdentity = async (identityData: CreateUnknownSchemaDTO, files: Record<string, Express.Multer.File>): Promise<{ unknownId: string; }> => {
+    const { camera_code, timestamp, embedding_count, centroid_embedding, poses, builder_stats } = identityData;
+    const poseEntries: any = {};
 
-    const embeddingArray = representativeEmbedding.map(Number);
+    let bestPose: string | null = null;
+    let bestQuality = -1;
+    let bestImageKey = "";
 
-    const imageKey = await this.uploadUnknownPersonImage(uuidv4(), face);
+    for (const [poseName, poseData] of Object.entries(poses)) {
+      const file = files[poseName];
 
+      if (!file) {
+        console.warn(`[WARN] Missing file for pose=${poseName}`);
+        continue;
+      }
+
+      const imageKey = await this.uploadUnknownPersonImage(uuidv4(), file);
+
+      poseEntries[poseName] = {
+        embedding: poseData.embedding.map(Number),
+        quality: poseData.quality,
+        faceSize: poseData.face_size,
+        imageKey,
+        ts: poseData.ts
+      };
+
+      if (poseData.quality > bestQuality) {
+        bestQuality = poseData.quality;
+        bestPose = poseName;
+        bestImageKey = imageKey;
+      }
+    }
+
+    if (!bestPose) {
+      throw new Error("No valid poses with images found");
+    }
     const newIdentity = await UnknownIdentityModel.create({
-      representativeEmbedding: embeddingArray,
-      representativeImageKey: imageKey,
+      representativeEmbedding: centroid_embedding.map(Number),
+
+      poses: poseEntries,
+
+      representativeImageKey: bestImageKey,
+      representativePose: bestPose,
+      representativeQuality: bestQuality,
+
       eventCount: 1,
+      embeddingCount: Number(embedding_count),
+
       firstSeen: Number(timestamp),
       lastSeen: Number(timestamp),
+
       status: "unknown",
-      cameraCode,
-      embeddingCount: Number(embeddingCount)
+      cameraCode: camera_code
     });
 
-    return { unknownId: newIdentity._id.toString(), imageKey };
+    return { unknownId: newIdentity._id.toString() };
+  };
+
+  // updateUnknownIdentity = async (unknownId: string, identityData: updateUnknownSchemaDTO, files: Record<string, Express.Multer.File>): Promise<{ unknownId: string; }> => {
+
+
+  //   const identity = await UnknownIdentityModel.findById(unknownId);
+  //   if (!identity) {
+  //     throw new ApiError(StatusCodes.NOT_FOUND, "Unknown identity not found");
+  //   }
+
+  //   // const existingPoses = identity.poses ?? {};
+  //   const existingPoses: PoseMap = {};
+
+  //   const poses = identity.poses as PoseMap; // safe narrowing
+
+  //   for (const key of Object.keys(poses) as PoseKey[]) {
+  //     const p = poses[key];
+
+  //     if (p?.embedding && typeof p.quality === "number") {
+  //       existingPoses[key] = {
+  //         embedding: p.embedding,
+  //         quality: p.quality,
+  //         faceSize: p.faceSize,
+  //         imageKey: p.imageKey,
+  //         ts: p.ts
+  //       };
+  //     }
+  //   }
+
+  //   const incomingPoses = identityData.poses;
+  //   const eventId = identity.representativeImageKey.split("/")[2];
+
+  //   if (!eventId) {
+  //     throw new ApiError(StatusCodes.BAD_REQUEST, "Invalid existing identity data, missing eventId.");
+  //   }
+  //   let updated = false;
+  //   for (let poseName of Object.keys(incomingPoses)) {
+  //     const incoming = incomingPoses[poseName];
+  //     const existing = existingPoses[poseName as keyof typeof existingPoses];
+
+  //     if (!incoming || !incoming.embedding || !incoming.quality) {
+  //       throw new ApiError(StatusCodes.BAD_REQUEST, `[WARN] Invalid incoming pose data for pose=${poseName}, missing embedding or quality.`);
+  //     }
+  //     const file = files[poseName];
+
+  //     if (!file) {
+  //       throw new ApiError(StatusCodes.BAD_REQUEST, `Missing image for pose: ${poseName}`);
+  //     }
+
+  //     if (!existing) {
+  //       // ✅ NEW POSE
+  //       const imageKey = await this.uploadUnknownPersonImage(eventId, file, poseName);
+
+  //       existingPoses[poseName as keyof typeof existingPoses] = {
+  //         embedding: incoming.embedding,
+  //         quality: incoming.quality,
+  //         faceSize: incoming.faceSize, // ✅ add this
+  //         imageKey,
+  //         ts: incoming.ts
+  //       };
+
+  //       updated = true;
+  //       continue;
+  //     }
+
+  //     // ------------------------------------------------
+  //     // ✅ REPLACE IF BETTER QUALITY
+  //     // ------------------------------------------------
+  //     if (incoming.quality > existing.quality) {
+
+  //       const imageKey = await this.uploadUnknownPersonImage(eventId, file, poseName);
+
+  //       existingPoses[poseName as keyof typeof existingPoses] = {
+  //         embedding: incoming.embedding,
+  //         quality: incoming.quality,
+  //         faceSize: incoming.faceSize, // ✅ add this
+  //         imageKey,
+  //         ts: incoming.ts
+  //       };
+
+  //       updated = true;
+  //     }
+  //   }
+
+  //   // ------------------------------------------------
+  //   // 🔥 RECOMPUTE CENTROID
+  //   // ------------------------------------------------
+  //   if (updated) {
+
+  //     const centroid = this.computeWeightedCentroid(existingPoses as Record<string, { embedding: number[]; quality: number }>);
+
+  //     identity.poses = existingPoses;
+  //     identity.representativeEmbedding = centroid;
+  //     identity.lastSeen = Date.now();
+
+  //     // 🔥 update representative pose (best quality)
+  //     const frontal = existingPoses["frontal"];
+
+  //     // ------------------------------------------------
+  //     // 🔥 RULE: prefer frontal always
+  //     // ------------------------------------------------
+  //     if (frontal) {
+  //       identity.representativePose = "frontal";
+  //       identity.representativeQuality = frontal.quality;
+  //       identity.representativeImageKey = frontal.imageKey;
+  //     } else {
+  //       // fallback → highest quality
+  //       let bestPose = "";
+  //       let bestQuality = -1;
+  //       let bestImageKey = "";
+
+  //       for (const p of Object.keys(existingPoses)) {
+  //         const pose = existingPoses[p as keyof typeof existingPoses];
+
+  //         if (pose && pose.quality > bestQuality) {
+  //           bestQuality = pose.quality;
+  //           bestPose = p;
+  //           bestImageKey = pose.imageKey;
+  //         }
+  //       }
+
+  //       identity.representativePose = bestPose;
+  //       identity.representativeQuality = bestQuality;
+  //       identity.representativeImageKey = bestImageKey;
+  //     }
+  //     identity.embeddingCount = Object.keys(existingPoses).length;
+
+  //     await identity.save();
+  //   }
+
+  //   return { unknownId: identity._id.toString() };
+  // }
+
+  updateUnknownIdentity = async (
+    unknownId: string,
+    identityData: updateUnknownSchemaDTO,
+    files: Record<string, Express.Multer.File>
+  ): Promise<{ unknownId: string }> => {
+
+    // ✅ STEP 1: GET PLAIN OBJECT
+    const identity = await UnknownIdentityModel.findById(unknownId).lean();
+
+    if (!identity) {
+      throw new ApiError(StatusCodes.NOT_FOUND, "Unknown identity not found");
+    }
+
+    // ✅ STEP 2: CLONE POSES (PURE JS)
+    const existingPoses: PoseMap = { ...(identity.poses ?? {}) };
+
+    let incomingPoses = identityData.poses;
+
+    // 🔥 HANDLE STRING CASE (multipart)
+    if (typeof incomingPoses === "string") {
+      incomingPoses = JSON.parse(incomingPoses);
+    }
+
+    const eventId = identity.representativeImageKey.split("/")[2];
+    if (!eventId) {
+      throw new ApiError(StatusCodes.BAD_REQUEST, "Invalid existing identity data, missing eventId.");
+    }
+
+    let updated = false;
+
+    // ------------------------------------------------
+    // ✅ STEP 3: MERGE LOGIC (PURE JS)
+    // ------------------------------------------------
+    for (const poseName of Object.keys(incomingPoses) as PoseKey[]) {
+      const incoming = incomingPoses[poseName];
+      const existing = existingPoses[poseName];
+
+      if (!incoming || !incoming.embedding || typeof incoming.quality !== "number") {
+        throw new ApiError(
+          StatusCodes.BAD_REQUEST,
+          `[WARN] Invalid incoming pose data for pose=${poseName}`
+        );
+      }
+
+      const file = files[poseName];
+      if (!file) {
+        throw new ApiError(StatusCodes.BAD_REQUEST, `Missing image for pose: ${poseName}`);
+      }
+
+      // ✅ NEW POSE
+      if (!existing) {
+        const imageKey = await this.uploadUnknownPersonImage(eventId, file, poseName);
+
+        existingPoses[poseName] = {
+          embedding: Array.from(incoming.embedding), // 🔥 normalize
+          quality: incoming.quality,
+          faceSize: incoming.faceSize,
+          imageKey,
+          ts: incoming.ts
+        };
+
+        updated = true;
+        continue;
+      }
+
+      // ✅ REPLACE IF BETTER QUALITY
+      if (incoming.quality > existing.quality) {
+        const imageKey = await this.uploadUnknownPersonImage(eventId, file, poseName);
+
+        existingPoses[poseName] = {
+          embedding: Array.from(incoming.embedding),
+          quality: incoming.quality,
+          faceSize: incoming.faceSize,
+          imageKey,
+          ts: incoming.ts
+        };
+
+        updated = true;
+      }
+    }
+
+    if (!updated) {
+      return { unknownId };
+    }
+
+    // ------------------------------------------------
+    // 🔥 STEP 4: CENTROID (PURE JS)
+    // ------------------------------------------------
+    const validPoses = Object.fromEntries(
+      Object.entries(existingPoses).filter(
+        ([_, p]) =>
+          p &&
+          p.embedding &&
+          typeof p.quality === "number" &&
+          p.embedding.length > 0
+      )
+    ) as Record<string, PoseData>;
+
+    if (Object.keys(validPoses).length === 0) {
+      throw new Error("No valid poses for centroid");
+    }
+
+    const centroid = this.computeWeightedCentroid(validPoses);
+
+    // ------------------------------------------------
+    // 🔥 STEP 5: REPRESENTATIVE POSE
+    // ------------------------------------------------
+    let representativePose: PoseKey | "" = "";
+    let representativeQuality = -1;
+    let representativeImageKey = "";
+
+    if (existingPoses["frontal"]) {
+      const frontal = existingPoses["frontal"];
+      representativePose = "frontal";
+      representativeQuality = frontal.quality;
+      representativeImageKey = frontal.imageKey!;
+    } else {
+      for (const key of Object.keys(existingPoses) as PoseKey[]) {
+        const pose = existingPoses[key];
+        if (pose && pose.quality > representativeQuality) {
+          representativeQuality = pose.quality;
+          representativePose = key;
+          representativeImageKey = pose.imageKey!;
+        }
+      }
+    }
+
+    // ------------------------------------------------
+    // 🔥 STEP 6: SINGLE DB WRITE (ATOMIC)
+    // ------------------------------------------------
+    await UnknownIdentityModel.findByIdAndUpdate(
+      unknownId,
+      {
+        $set: {
+          poses: existingPoses,
+          representativeEmbedding: centroid,
+          representativePose,
+          representativeQuality,
+          representativeImageKey,
+          embeddingCount: Object.keys(existingPoses).length,
+          lastSeen: Date.now()
+        }
+      },
+      { new: false } // no need to return doc
+    );
+
+    return { unknownId };
   };
 
   createUnknownPersonEvent = async (eventData: CreateUnknownPersonEventServiceDTO, face: Express.Multer.File) => {
@@ -143,7 +458,7 @@ class UnknownService {
     const imageKey = await this.uploadUnknownPersonImage(eventId, face);
 
     const savedUnknown = await UnknownIdentityModel.findById(unknownId);
-    if(!savedUnknown) throw new ApiError(StatusCodes.NOT_FOUND, "Unknown identity not found");
+    if (!savedUnknown) throw new ApiError(StatusCodes.NOT_FOUND, "Unknown identity not found");
 
     savedUnknown.eventCount += 1;
     savedUnknown.lastSeen = timestamp;
@@ -213,10 +528,10 @@ class UnknownService {
   //   console.log({ primaryIdentity, embeddings, counts });
   // }
 
-  private uploadUnknownPersonImage = async (eventId: string, file: Express.Multer.File) => {
+  private uploadUnknownPersonImage = async (eventId: string, file: Express.Multer.File, poseName?: string) => {
 
     const bucket = envConfig.minioEmployeeBucketName;
-    const prefix = `unknown_persons/events/${eventId}`;
+    const prefix = poseName ? `unknown_persons/events/${eventId}/${poseName}` : `unknown_persons/events/${eventId}`;
 
     const key = this.minioService.generateKey(prefix, file.originalname);
 
@@ -301,6 +616,55 @@ class UnknownService {
   generateMinioUrl(bucketName: string, representativeImageKey: string) {
     return `https://minio.mssplonline.in/${bucketName}/${representativeImageKey}`;
   }
+
+  computeWeightedCentroid(poses: Record<string, { embedding: number[]; quality: number; }>): number[] {
+    const poseList = Object.values(poses);
+
+    console.log(" poses:=====", poseList);
+    if (!poseList) {
+      throw new Error("No poses available for centroid");
+    }
+
+    if (poseList.length === 0) {
+      throw new Error("No poses available for centroid");
+    }
+
+    const firstPose = poseList[0];
+    if (!firstPose) {
+      throw new Error("No valid poses available");
+    }
+
+    // const dim = firstPose.poses.embedding.length;
+
+
+    const sum = new Array(512).fill(0);
+    let totalWeight = 0;
+
+    for (const pose of poseList) {
+      const emb = pose.embedding;
+      const w = pose.quality;
+
+      totalWeight += w;
+
+      for (let i = 0; i < 512; i++) {
+        sum[i] += emb[i]! * w;
+      }
+    }
+
+    // avoid divide by zero
+    if (totalWeight === 0) {
+      throw new Error("Invalid total weight");
+    }
+
+    // mean
+    const centroid = sum.map(v => v / totalWeight);
+
+    // 🔥 CRITICAL: normalize
+    const norm = Math.sqrt(centroid.reduce((acc, v) => acc + v * v, 0));
+
+    return centroid.map(v => v / norm);
+  }
+
 }
 
 export default UnknownService;

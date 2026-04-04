@@ -1,5 +1,5 @@
 import { NextFunction, Request, Response } from "express";
-import { CreateUnknownEventDTO, CreateUnknownIdentityDTO, CreateUnknownPersonEventDTO, MergeUnknownDTO } from "./unknown.types";
+import { CreateUnknownEventDTO, CreateUnknownIdentityDTO, CreateUnknownPersonEventDTO, CreateUnknownSchemaDTO, MergeUnknownDTO, updateUnknownSchemaDTO } from "./unknown.types";
 import { unknownService } from "./unknown.module";
 import { ApiError, ApiResponse } from "../../utils";
 import { StatusCodes } from "http-status-codes";
@@ -8,40 +8,83 @@ import { UnknownIdentityModel } from "./unknown-identity.model";
 import axios from "axios";
 
 class UnknownController {
-    async createUnknownEvent(req: Request, res: Response, next: NextFunction){
+    async createUnknownEvent(req: Request, res: Response, next: NextFunction) {
         try {
             const { camera_code, pid, reason, tid, timestamp } = req.body as CreateUnknownEventDTO;
             const faces = req.files as Express.Multer.File[];
             const { eventId, identityId } = await unknownService.createUnknownEvent({ camera_code, pid, reason, tid, timestamp }, faces);
             return ApiResponse.success(res, "Unknown event created successfully", { eventId, identityId });
-        } catch (error) { 
+        } catch (error) {
             return next(error);
         }
     }
 
-    async createUnknownPersonEvents(req: Request, res: Response, next: NextFunction){
+    async createUnknownPersonEvents(req: Request, res: Response, next: NextFunction) {
         try {
             const { cameraCode, timestamp, unknownId, meanEmbedding } = req.body as CreateUnknownPersonEventDTO;
             const face = req.file;
-            
-            if(!face) throw new ApiError(StatusCodes.BAD_REQUEST, "Face is required");
+
+            if (!face) throw new ApiError(StatusCodes.BAD_REQUEST, "Face is required");
             const data = await unknownService.createUnknownPersonEvent({ cameraCode, timestamp, unknownId, meanEmbedding }, face);
-            
+
             return ApiResponse.success(res, "Unknown person event created successfully", data);
         } catch (error) {
             return next(error);
         }
     }
 
-    async createUnknownIdentity(req: Request, res: Response, next: NextFunction){
+    async createUnknownIdentity(req: Request, res: Response, next: NextFunction) {
         try {
-            const { cameraCode, timestamp, representativeEmbedding, embeddingCount } = req.body as CreateUnknownIdentityDTO;
-            const face = req.file;
+            const payload = req.body as CreateUnknownSchemaDTO;
 
-            if(!face) throw new ApiError(StatusCodes.BAD_REQUEST, "Face is required");
-            const data = await unknownService.createUnknownIdentity({ cameraCode, timestamp, representativeEmbedding, embeddingCount }, face);
+            if (!payload) {
+                throw new Error("Missing payload");
+            }
+
+            const files = req.files as Express.Multer.File[];
+
+            // 🔥 Map files by pose name
+            const fileMap: Record<string, Express.Multer.File> = {};
+
+            for (const file of files) {
+                // fieldname = face_frontal
+                const pose = file.fieldname.replace("face_", "");
+                fileMap[pose] = file;
+            }
+
+            const data = await unknownService.createUnknownIdentity(payload, fileMap);
+            console.log("Controller created identity", data);
 
             return ApiResponse.success(res, "Unknown identity created successfully", data);
+        } catch (error) {
+            return next(error);
+        }
+    }
+
+    async updateUnknownIdentity(req: Request, res: Response, next: NextFunction) {
+        try {
+            // const { unknownId } = req.params;
+            const payload = req.body as updateUnknownSchemaDTO;
+
+            if (!payload) {
+                throw new Error("Missing payload");
+            }
+
+            const files = req.files as Express.Multer.File[];
+
+            // 🔥 Map files by pose name
+            const fileMap: Record<string, Express.Multer.File> = {};
+
+            for (const file of files) {
+                // fieldname = face_frontal
+                const pose = file.fieldname.replace("face_", "");
+                fileMap[pose] = file;
+            }
+
+            const data = await unknownService.updateUnknownIdentity(payload.unknownId, payload, fileMap);
+            console.log("Controller updated identity", data);
+
+            return ApiResponse.success(res, "Unknown identity updated successfully", data);
         } catch (error) {
             return next(error);
         }
@@ -64,36 +107,36 @@ class UnknownController {
             return next(error);
         }
     }
-    
+
     mergeUnknown = async (req: Request, res: Response, next: NextFunction) => {
         try {
             const { sourceIds } = req.body as MergeUnknownDTO;
             console.log("Source", sourceIds)
             const ids = sourceIds;
-              
-                const identities = await UnknownIdentityModel.find({
-                  _id: { $in: ids }
-                });
-              
-                const embeddings = identities.map(i => i.representativeEmbedding);
-                const counts = identities.map(i => i.embeddingCount);
-              
-                const ress = await axios.post("http://localhost:4001/merge", {
-                  embeddings,
-                  counts
-                });
-                /**
-                 * {
-                    status: 'error',
-                    message: 'Embeddings too different (similarity=0.330)'
-                    }
-                 */
 
-                console.log(ress.data);
-                if(ress.data.status === "error") {
-                   throw new ApiError(StatusCodes.BAD_REQUEST, `Do not merge. ${ress.data.message}`);
-                } 
-              
+            const identities = await UnknownIdentityModel.find({
+                _id: { $in: ids }
+            });
+
+            const embeddings = identities.map(i => i.representativeEmbedding);
+            const counts = identities.map(i => i.embeddingCount);
+
+            const ress = await axios.post("http://localhost:4001/merge", {
+                embeddings,
+                counts
+            });
+            /**
+             * {
+                status: 'error',
+                message: 'Embeddings too different (similarity=0.330)'
+                }
+             */
+
+            console.log(ress.data);
+            if (ress.data.status === "error") {
+                throw new ApiError(StatusCodes.BAD_REQUEST, `Do not merge. ${ress.data.message}`);
+            }
+
             // const data = await unknownService.mergeUnknown(sourceIds);
             return ApiResponse.success(res, "Unknown merged successfully", ress.data);
         } catch (error) {
@@ -101,7 +144,7 @@ class UnknownController {
         }
     }
 
-   
+
 }
-    
+
 export default UnknownController;

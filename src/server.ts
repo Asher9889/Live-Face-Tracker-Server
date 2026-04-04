@@ -3,7 +3,7 @@ import cors from "cors";
 import compression from "compression";
 import { connectMongoDB, connectRedis } from "./db";
 import { envConfig } from "./config";
-import { globalErrorHandler, routeNotExistsHandler } from "./utils";
+import { globalErrorHandler, routeNotExistsHandler, createHttpLogger } from "./utils";
 import apiRouter from "./routes";
 import http from "http";
 import { initWSSStreaming, initCameraStatusSubscriber } from "./stream";
@@ -12,9 +12,8 @@ import { initEventHandlers } from "./events/Event";
 import loadCameraConfigsToRedis from "./module/cameras/infrastructure/camera.cache";
 import { presenceController } from "./module/presence/presence.module";
 import cookieParser from "cookie-parser";
-import PinoHttp from "pino-http";
 
-const Pinologger = PinoHttp();
+const Pinologger = createHttpLogger();
 
 connectMongoDB();
 connectRedis();

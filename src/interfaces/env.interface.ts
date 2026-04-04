@@ -20,8 +20,11 @@ interface IEnv {
     clientEmail: string;
     enquiryN8NWebhookUrl: string;
 
+    // Multer
     employeeImageMaxCount: number;
     employeeImageMaxSize: number;
+    unknownImageMaxCount: number;
+    unknownImageMaxSize: number;
 
     // minio
     minioEndpoint: string;
