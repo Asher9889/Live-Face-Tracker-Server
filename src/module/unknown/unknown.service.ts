@@ -619,8 +619,6 @@ class UnknownService {
 
   computeWeightedCentroid(poses: Record<string, { embedding: number[]; quality: number; }>): number[] {
     const poseList = Object.values(poses);
-
-    console.log(" poses:=====", poseList);
     if (!poseList) {
       throw new Error("No poses available for centroid");
     }
