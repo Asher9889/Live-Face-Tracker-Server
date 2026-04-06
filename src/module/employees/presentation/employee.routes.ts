@@ -8,6 +8,7 @@ import employeeQuerySchema from "../middlewares/employeeQuerySchema";
 const router = express.Router();    
 const controller = new EmployeeController();
 
+// Create employee
 router.post("/", uploadFaces, multerErrorHandler, validate(createEmployeeSchema), controller.createEmployee);
 router.get("/", validateQuery(employeeQuerySchema), controller.findAllEmployees);
 

@@ -43,6 +43,18 @@ export class EmployeeService {
 
     const embeddings = await this.embeddingService.generateEmbeddingsForEmployee(files);
 
+    if(!embeddings.success) {
+      throw new ApiError(StatusCodes.BAD_REQUEST, embeddings.message, [
+        { field: "faces", message: "Failed to generate embeddings for the uploaded images" },
+      ]);
+    }
+
+    console.log("Received embeddings for employee creation========:", embeddings);
+
+    console.log("Received embeddings from embedding service:", embeddings.raw_embeddings);
+    console.log("Received embeddings from mean service:", embeddings.mean_embedding);
+
+
     dto.embeddings = embeddings.raw_embeddings;   // raw vectors array
     dto.meanEmbedding = embeddings.mean_embedding; // single embedding vector
 

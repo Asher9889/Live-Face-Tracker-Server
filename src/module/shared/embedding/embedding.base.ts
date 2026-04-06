@@ -5,6 +5,7 @@ import { StatusCodes } from "http-status-codes";
 
 interface IEmbeddingBase {
     success: boolean;
+    message: string;
     num_valid_images: number;
     raw_embeddings: number[][];
     mean_embedding: number[];
@@ -17,6 +18,7 @@ export abstract class EmbeddingBase {
   protected async requestEmbedding(files: Express.Multer.File[]) {
     try {
       const form = new FormData();
+      console.log("Requesting embedding for files:", files.map(f => f.originalname));
 
       files.forEach((file, _) => {
         form.append("files", file.buffer, {
@@ -25,7 +27,8 @@ export abstract class EmbeddingBase {
         });
       });
 
-      const response = await axios.post(`${this.apiUrl}/register-face`, form, { headers: form.getHeaders() });
+      const response = await axios.post(`${this.apiUrl}`, form, { headers: form.getHeaders() });
+      console.log("Received response from embedding API:", response.data);
       return response.data as IEmbeddingBase; // assume API returns embeddings array
     } catch (err: any) {
       console.log("error is:", err)
