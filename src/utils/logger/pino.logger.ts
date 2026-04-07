@@ -10,7 +10,7 @@ export default function createHttpLogger() {
         // base: null,
 
         // ISO timestamp
-        timestamp: () => `,"time":"${new Date().toLocaleDateString()}"`,
+        timestamp: () => `,"time":"${new Date().toLocaleString()}"`,
 
         serializers: {
             req(req) {

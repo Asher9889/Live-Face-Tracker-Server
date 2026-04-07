@@ -82,7 +82,6 @@ class UnknownController {
             }
 
             const data = await unknownService.updateUnknownIdentity(payload.unknownId, payload, fileMap);
-            console.log("Controller updated identity", data);
 
             return ApiResponse.success(res, "Unknown identity updated successfully", data);
         } catch (error) {
