@@ -1,7 +1,7 @@
 import { NextFunction, Request, Response } from "express";
 import { CreateUnknownEventDTO, CreateUnknownIdentityDTO, CreateUnknownPersonEventDTO, CreateUnknownSchemaDTO, MergeUnknownDTO, updateUnknownSchemaDTO } from "./unknown.types";
 import { unknownService } from "./unknown.module";
-import { ApiError, ApiResponse } from "../../utils";
+import { ApiError, ApiResponse, saveUnknownDebugImages } from "../../utils";
 import { StatusCodes } from "http-status-codes";
 import { v4 as uuidv4 } from 'uuid';
 import { UnknownIdentityModel } from "./unknown-identity.model";
@@ -43,6 +43,9 @@ class UnknownController {
 
             const files = req.files as Express.Multer.File[];
 
+            // Debug: save uploaded images (raw + decoded) when enabled
+            try { await saveUnknownDebugImages(req, { endpoint: "unknown.create" }); } catch (e) { /* swallow */ }
+
             // 🔥 Map files by pose name
             const fileMap: Record<string, Express.Multer.File> = {};
 
@@ -71,6 +74,9 @@ class UnknownController {
             }
 
             const files = req.files as Express.Multer.File[];
+
+            // Debug: save uploaded images (raw + decoded) when enabled
+            try { await saveUnknownDebugImages(req, { endpoint: "unknown.update", unknownId: payload.unknownId }); } catch (e) { /* swallow */ }
 
             // 🔥 Map files by pose name
             const fileMap: Record<string, Express.Multer.File> = {};

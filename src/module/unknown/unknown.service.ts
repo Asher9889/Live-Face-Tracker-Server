@@ -529,7 +529,7 @@ class UnknownService {
   // }
 
   private uploadUnknownPersonImage = async (eventId: string, file: Express.Multer.File, poseName?: string) => {
-
+    console.log(`Uploading image for eventId=${eventId}, pose=${poseName || "N/A"}, originalname=${file.originalname}, size=${file.size} bytes`);
     const bucket = envConfig.minioEmployeeBucketName;
     const prefix = poseName ? `unknown_persons/events/${eventId}/${poseName}` : `unknown_persons/events/${eventId}`;
 

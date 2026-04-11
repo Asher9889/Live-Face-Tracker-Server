@@ -134,7 +134,7 @@ const uploadUnknownFaces = multer({
     if(!AllowedPoses.includes(pose)){
       cb(new Error(`Invalid file field: ${file.fieldname}. Allowed fields are ${Array.from(AllowedPoses).join(", ")}`));
     }
-
+    console.log("Accepted file", file.fieldname, file.originalname);
     cb(null, true);
   }
 });
