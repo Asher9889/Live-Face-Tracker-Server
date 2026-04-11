@@ -116,7 +116,11 @@ const createUnknownSchema = zod.object({
     // ✅ string → JSON → record
     poses: zod.string()
         .refine(val => {
-            try { JSON.parse(val); return true; } catch { return false; }
+            try {
+                const value = JSON.parse(val);
+                return true ;
+            }
+            catch { return false; }
         }, { message: "Invalid poses JSON" })
         .transform(val => JSON.parse(val))
         .pipe(
@@ -164,7 +168,7 @@ const poseSchema = zod.object({
         .number()
         .min(0)
         .max(1),
-    
+
     faceSize: zod.object({
         w: zod.number().int().positive(),
         h: zod.number().int().positive()

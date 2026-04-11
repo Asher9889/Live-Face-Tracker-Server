@@ -123,19 +123,24 @@ const uploadUnknownFaces = multer({
   },
   fileFilter: (req, file, cb) => {
     if (!["image/jpeg", "image/png"].includes(file.mimetype)) {
-      cb(new Error("Invalid file type")); // reject file
+      return cb(new Error("Invalid file type")); // reject file
     }
 
-    if(!file.fieldname.startsWith("face_")){
-      cb(new Error(`Invalid file field: ${file.fieldname}.`));
+    if (file.size < 0) {
+      return cb(new Error("File size must be positive"));
+    }
+
+    if (!file.fieldname.startsWith("face_")) {
+      return cb(new Error(`Invalid file field: ${file.fieldname}.`));
     }
     let pose = file.fieldname.replace("face_", "");
 
-    if(!AllowedPoses.includes(pose)){
-      cb(new Error(`Invalid file field: ${file.fieldname}. Allowed fields are ${Array.from(AllowedPoses).join(", ")}`));
+    if (!AllowedPoses.includes(pose)) {
+      return cb(new Error(`Invalid file field: ${file.fieldname}. Allowed fields are ${Array.from(AllowedPoses).join(", ")}`));
     }
-    console.log("Accepted file", file.fieldname, file.originalname);
-    cb(null, true);
+    // console.log("Accepted file", file.fieldname, file.originalname, file.size);
+
+    return cb(null, true);
   }
 });
 
@@ -173,7 +178,7 @@ function uploadUnknownFacesErrorHandler(err: any, req: Request, res: Response, n
     );
   }
 
-  next(err);
+  next();
 }
 
 export { uploadUnknownFaces, uploadUnknownFacesErrorHandler };

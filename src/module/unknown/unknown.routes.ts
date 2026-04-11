@@ -12,9 +12,9 @@ router.post("/event", uploadFaces, multerErrorHandler, validate(createUnknownSch
 // For saving unknown events (appeaence)
 router.post("/events", uploadFace, multerSingleFaceErrorHandler, validate(createUnknownPersonEventSchema), unknownController.createUnknownPersonEvents);
 // For Creating new person identity
-router.post("/", uploadUnknownFaces.any(), uploadUnknownFacesErrorHandler, multerDebugLogger, validate(createUnknownSchema), unknownController.createUnknownIdentity);
+router.post("/", uploadUnknownFaces.any(), uploadUnknownFacesErrorHandler, validate(createUnknownSchema), multerDebugLogger, unknownController.createUnknownIdentity);
 // For Updating existing identity with new appearance
-router.patch("/:unknownId", uploadUnknownFaces.any(), uploadUnknownFacesErrorHandler, multerDebugLogger, validate(updateUnknownSchema), unknownController.updateUnknownIdentity);
+router.patch("/:unknownId", uploadUnknownFaces.any(), uploadUnknownFacesErrorHandler, validate(updateUnknownSchema), unknownController.updateUnknownIdentity);
 
 router.get("/persons", unknownController.getUnknownPersons);
 
