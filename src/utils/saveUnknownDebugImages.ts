@@ -32,13 +32,38 @@ export default async function saveUnknownDebugImages(req: Request, context: Cont
 
       const rawFilename = `${ts}_${safeField}_raw.bin`;
       const rawPath = path.join(baseDir, rawFilename);
-      // Save raw binary exactly as received
-      if (file.buffer) {
-        await fs.writeFile(rawPath, file.buffer);
-      } else if (file.path) {
-        // fallback: copy from path
-        const data = await fs.readFile(file.path);
-        await fs.writeFile(rawPath, data);
+
+      // Try to obtain raw bytes robustly: prefer buffer (memoryStorage), then disk path, then stream
+      let rawData: Buffer | null = null;
+      const bufferLen = file.buffer ? file.buffer.length : 0;
+      try {
+        if (file.buffer && bufferLen > 0) {
+          rawData = file.buffer as Buffer;
+        } else if ((file as any).path) {
+          try {
+            rawData = await fs.readFile((file as any).path);
+          } catch (_) {
+            rawData = null;
+          }
+        } else if ((file as any).stream && typeof (file as any).stream.pipe === 'function') {
+          // read stream into buffer
+          rawData = await new Promise<Buffer | null>((resolve) => {
+            const chunks: Buffer[] = [];
+            (file as any).stream.on('data', (c: Buffer) => chunks.push(c));
+            (file as any).stream.on('end', () => resolve(Buffer.concat(chunks)));
+            (file as any).stream.on('error', () => resolve(null));
+          });
+        }
+      } catch (e) {
+        rawData = null;
+      }
+
+      // Save raw binary exactly as received (or empty if unavailable)
+      if (rawData && rawData.length > 0) {
+        await fs.writeFile(rawPath, rawData);
+      } else {
+        // ensure a file exists so user can inspect folder; write zero bytes if nothing else
+        await fs.writeFile(rawPath, Buffer.alloc(0));
       }
 
       let decodeSuccess = false;
@@ -48,19 +73,26 @@ export default async function saveUnknownDebugImages(req: Request, context: Cont
       let errorMessage: string | null = null;
 
       try {
-        const image = sharp(file.buffer as Buffer);
-        const meta = await image.metadata();
-        const out = await image.jpeg({ quality: 90 }).toBuffer();
-        decodedFilename = `${ts}_${safeField}_decoded.jpg`;
-        const decodedPath = path.join(baseDir, decodedFilename);
-        await fs.writeFile(decodedPath, out);
-        decodeSuccess = true;
-        width = meta.width ?? null;
-        height = meta.height ?? null;
+        // Only attempt decode if we have non-empty rawData
+        if (rawData && rawData.length > 0) {
+          const image = sharp(rawData);
+          const meta = await image.metadata();
+          const out = await image.jpeg({ quality: 90 }).toBuffer();
+          decodedFilename = `${ts}_${safeField}_decoded.jpg`;
+          const decodedPath = path.join(baseDir, decodedFilename);
+          await fs.writeFile(decodedPath, out);
+          decodeSuccess = true;
+          width = meta.width ?? null;
+          height = meta.height ?? null;
+        } else {
+          decodeSuccess = false;
+          errorMessage = "No raw bytes available (size=0)";
+        }
       } catch (err: any) {
         decodeSuccess = false;
         errorMessage = err?.message ? String(err.message) : String(err || "unknown error");
       }
+
 
       const entry = {
         endpoint: context.endpoint,
@@ -70,6 +102,8 @@ export default async function saveUnknownDebugImages(req: Request, context: Cont
         originalName: file.originalname,
         mimeType: file.mimetype,
         size: file.size,
+        bufferLength: bufferLen,
+        rawSavedBytes: rawData ? rawData.length : 0,
         rawPath: rawFilename,
         decodedPath: decodedFilename,
         decodeSuccess,
@@ -81,7 +115,7 @@ export default async function saveUnknownDebugImages(req: Request, context: Cont
       metadataEntries.push(entry);
 
       // Safe one-line logging per file
-      console.log(`[UnknownDebug] ${file.fieldname} decode=${decodeSuccess ? 'OK' : 'FAIL'} raw=${rawPath} decoded=${decodedFilename ? path.join(baseDir, decodedFilename) : 'FAILED'}`);
+      console.log(`[UnknownDebug] ${file.fieldname} decode=${decodeSuccess ? 'OK' : 'FAIL'} size=${file.size} buffer=${bufferLen} saved=${rawData ? rawData.length : 0} raw=${rawPath} decoded=${decodedFilename ? path.join(baseDir, decodedFilename) : 'FAILED'}`);
     }
 
     const metaFile = path.join(baseDir, `metadata.json`);
