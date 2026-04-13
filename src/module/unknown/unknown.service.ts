@@ -35,7 +35,7 @@ class UnknownService {
   }
 
   getUnknownPersons = async (): Promise<GetUnknownPersonsDTO[]> => {
-    const unknownPersons = await UnknownIdentityModel.find({}, { representativeEmbedding: 0, createdAt: 0, updatedAt: 0 }).lean();
+    const unknownPersons = await UnknownIdentityModel.find({status: "unknown"}, { representativeEmbedding: 0, createdAt: 0, updatedAt: 0 }).lean();
     const persons = unknownPersons.map((p) => {
       const { representativeImageKey, _id, ...rest } = p;
 
@@ -359,7 +359,7 @@ class UnknownService {
         existingPoses[poseName] = {
           embedding: Array.from(incoming.embedding), // 🔥 normalize
           quality: incoming.quality,
-          faceSize: incoming.face_size,
+          faceSize: incoming.faceSize,
           imageKey,
           ts: incoming.ts
         };
@@ -375,7 +375,7 @@ class UnknownService {
         existingPoses[poseName] = {
           embedding: Array.from(incoming.embedding),
           quality: incoming.quality,
-          faceSize: incoming.face_size,
+          faceSize: incoming.faceSize,
           imageKey,
           ts: incoming.ts
         };

@@ -26,6 +26,8 @@ export interface IUnknownIdentity {
   status: IdentityStatus;
   cameraCode: string;
 
+  mergedInto: mongoose.Types.ObjectId | null;
+
   createdAt: Date;
   updatedAt: Date;
 }
@@ -57,7 +59,7 @@ const PoseSchema = new mongoose.Schema(
     ts: {
       type: Number,
       required: true,
-    },
+    }
   },
   { _id: false }
 );
@@ -143,6 +145,13 @@ const UnknownIdentitySchema = new mongoose.Schema<IUnknownIdentity>(
       type: String,
       required: true,
       index: true,
+    },
+    mergedInto: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "UnknownIdentity",
+      required: false,
+      index: true,
+      default: null,
     },
   },
   {

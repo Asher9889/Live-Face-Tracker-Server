@@ -93,19 +93,16 @@ const createUnknownSchema = zod.object({
 
     camera_code: zod.string().min(1),
 
-    // ✅ string → number
     timestamp: zod.string()
         .refine(val => !isNaN(Number(val)), { message: "Invalid timestamp" })
         .transform(val => Number(val))
         .pipe(zod.number().int().positive()),
 
-    // ✅ string → number
     embedding_count: zod.string()
         .refine(val => !isNaN(Number(val)), { message: "Invalid embedding_count" })
         .transform(val => Number(val))
         .pipe(zod.number().int().positive()),
 
-    // ✅ string → JSON → array
     centroid_embedding: zod.string()
         .refine(val => {
             try { JSON.parse(val); return true; } catch { return false; }
@@ -113,14 +110,11 @@ const createUnknownSchema = zod.object({
         .transform(val => JSON.parse(val))
         .pipe(zod.array(zod.number())),
 
-    // ✅ string → JSON → record
     poses: zod.string()
         .refine(val => {
             try {
                 const value = JSON.parse(val);
-                console.log("Parsed poses JSON:", value);
-                console.log("typeof values is:", typeof value);
-                return true;
+                return true ;
             }
             catch { return false; }
         }, { message: "Invalid poses JSON" })
@@ -185,36 +179,22 @@ const updateUnknownSchema = zod.object({
 
     cameraCode: zod.string().min(1),
 
-    poses: zod.string()
-        .refine(val => {
+    poses: zod
+        .string()
+        .transform((val, ctx) => {
             try {
-                const value = JSON.parse(val);
-                console.log("Parsed poses JSON:", value);
-                console.log("typeof values is:", typeof value);
-                return true;
+                return JSON.parse(val);
+            } catch {
+                ctx.addIssue({
+                    code: zod.ZodIssueCode.custom,
+                    message: "Invalid JSON in poses"
+                });
+                return zod.NEVER;
             }
-            catch { return false; }
-        }, { message: "Invalid poses JSON" })
-        .transform(val => JSON.parse(val))
+        })
         .pipe(
-            zod.record(
-                zod.string(),
-                zod.object({
-                    embedding: zod.array(zod.number()),
-                    quality: zod.number().min(0).max(1),
-                    face_size: zod.object({
-                        w: zod.number().int().positive(),
-                        h: zod.number().int().positive()
-                    }),
-                    ts: zod.number().int().positive()
-                })
-            ).refine((record) => {
-                const keys = Object.keys(record || {});
-                return keys.length > 0 && keys.every(k => AllowedPoses.includes(k));
-            }, {
-                message: 'At least one valid pose is required and keys must be one of ' + AllowedPoses.join(', ')
-            })
-        ),
+            zod.record(zod.string(), poseSchema) // dynamic keys: frontal, left_mid, etc.
+        )
 })
 
 export default createUnknownEventSchema;
