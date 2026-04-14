@@ -13,6 +13,7 @@ const envConfig: IEnv = {
     dbName: process.env.MONGO_DBNAME!,
 
     mongoDBUrl: process.env.MONGO_DB_URL!,
+    mongoDBReplicaSet: process.env.MONGO_DB_REPLICA_SET!,
     
     mongoUser: process.env.MONGO_USER!,
     mongoPassword: process.env.MONGO_PASSWORD!,

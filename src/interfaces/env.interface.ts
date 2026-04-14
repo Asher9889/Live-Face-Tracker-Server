@@ -7,6 +7,7 @@ interface IEnv {
     mongoPort: string;
     mongoAuthSource: string;
     mongoDBUrl?: string;
+    mongoDBReplicaSet?: string;
     dbName: string;
     accessSecret: string;
     refreshSecret: string;

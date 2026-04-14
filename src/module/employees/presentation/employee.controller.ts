@@ -62,11 +62,11 @@ export default class EmployeeController {
     createEmployeeFromUnknown = async (req: Request, res: Response, next: NextFunction) => {
         try {
             const payload = req.body as TCreateEmployeeFromUnknownDTO;
-            const file = req.file;
-            if (!file) {
-                throw new ApiError(400, "At least one face image is required");
-            }
-            const data = await employeeService.createEmployeeFromUnknown(payload, file);
+            const file = req.file ?? null;
+            // if (!file) {
+            //     throw new ApiError(400, "At least one face image is required");
+            // }
+            const data = await employeeService.createEmployeeFromUnknown(payload, file); 
             return ApiResponse.success(res, "Unknown converted to employee successfully", data);
         } catch (error) {
             return next(error);

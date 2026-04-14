@@ -4,7 +4,7 @@ import { StatusCodes } from "http-status-codes";
 import { envConfig } from "../config";
 
 // export const mongoUrl = `mongodb://${envConfig.mongoUser}:${envConfig.mongoPassword}@${envConfig.mongoHost}:${envConfig.mongoPort}/${envConfig.dbName}?authSource=${envConfig.mongoAuthSource}`;
-export const mongoUrl = `${envConfig.mongoDBUrl}/${envConfig.dbName}`;
+export const mongoUrl = `${envConfig.mongoDBUrl}/${envConfig.dbName}?replicaSet=${envConfig.mongoDBReplicaSet}`;
 
 async function connectMongoDB(): Promise<Connection | undefined> {
     try {

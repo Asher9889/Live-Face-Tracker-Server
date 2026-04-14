@@ -13,6 +13,7 @@ import { TCreateEmployeeFromUnknownDTO } from "../validations/employee.schema";
 import { UnknownIdentityModel } from "../../unknown/unknown-identity.model";
 import EmployeeModel from "../infrastructure/employee.model";
 import axios from "axios";
+import mongoose from "mongoose";
 
 export class EmployeeService {
   private embeddingService: EmployeeEmbeddingService;
@@ -43,7 +44,7 @@ export class EmployeeService {
 
     const embeddings = await this.embeddingService.generateEmbeddingsForEmployee(files);
 
-    if(!embeddings.success) {
+    if (!embeddings.success) {
       throw new ApiError(StatusCodes.BAD_REQUEST, embeddings.message, [
         { field: "faces", message: "Failed to generate embeddings for the uploaded images" },
       ]);
@@ -72,7 +73,7 @@ export class EmployeeService {
     return saved;
   }
 
-  async findAllEmployees(query: { limit: number, cursor?: string }):Promise<{data: any[], hasMore: boolean, cursor: string | null}> {
+  async findAllEmployees(query: { limit: number, cursor?: string }): Promise<{ data: any[], hasMore: boolean, cursor: string | null }> {
     const { limit, cursor } = query;
 
     const queryFilter: any = {};
@@ -102,51 +103,63 @@ export class EmployeeService {
     return this.repo.findAllEmbeddings();
   }
 
-  async createEmployeeFromUnknown(dto: TCreateEmployeeFromUnknownDTO, file: Express.Multer.File){
-    const unknown = await UnknownIdentityModel.findById(dto.unknownId).lean();
+  async createEmployeeFromUnknown(dto: TCreateEmployeeFromUnknownDTO, file: Express.Multer.File | null = null) {
+    const session = await mongoose.startSession();
 
-    
-    if(!unknown) { 
-      throw new ApiError(StatusCodes.NOT_FOUND, "Unknown identity not found", [{ field: "unknownId", message: "Unknown identity not found" }]);
+    try {
+      session.startTransaction();
+      const unknown = await UnknownIdentityModel.findById(dto.unknownId).session(session);
+
+      if (!unknown) {
+        throw new ApiError(StatusCodes.NOT_FOUND, "Unknown identity not found", [{ field: "unknownId", message: "Unknown identity not found" }]);
+      }
+      if (unknown.status === "converted") {
+        throw new ApiError(StatusCodes.BAD_REQUEST, "Already converted");
+      }
+
+      // check is employee registered with same embeddings?
+      const isMatch = await axios.post(envConfig.unknownMatchWithExistingApiUrl, {
+        embedding: unknown?.representativeEmbedding,
+        threshold: 0.40
+      });
+
+      if (isMatch.data.isDuplicate) {
+        throw new ApiError(StatusCodes.BAD_REQUEST, "Employee with same embeddings already exists", isMatch.data);
+      }
+      let uploadedKeys;
+      if (file) {
+        uploadedKeys = await this.employeeMinioService.uploadEmployeeImages(dto.name, [file]);
+      }
+
+      const employee = await EmployeeModel.create({
+        name: dto.name,
+        email: dto.email,
+        department: dto.department,
+        role: dto.role,
+        faceImages: uploadedKeys ?? [unknown.representativeImageKey] ,
+        meanEmbedding: unknown.representativeEmbedding,
+      });
+
+      unknown.status = "converted";
+      await unknown.save({ session });
+
+      // await UnknownIdentityModel.findByIdAndUpdate(dto.unknownId, { status: "converted" }).session(session);
+
+      const promoted = await axios.post(envConfig.unknownPromoteApiUrl, {
+        unknownId: dto.unknownId,
+        employeeId: employee._id.toString(),
+        employeeName: dto.name,
+        embedding: unknown?.representativeEmbedding
+      });
+
+      if (!promoted.data.success) {
+        throw new ApiError(StatusCodes.INTERNAL_SERVER_ERROR, "Failed to promote unknown to employee");
+      }
+      session.commitTransaction();
+      return employee;
+    } catch (error) {
+      session.abortTransaction();
+      throw error;
     }
-    if (unknown.status === "converted") {
-      throw new ApiError(StatusCodes.BAD_REQUEST, "Already converted");
-    }
-
-    // check is employee registered with same embeddings?
-    const isMatch = await axios.post(envConfig.unknownMatchWithExistingApiUrl, {
-      embedding: unknown?.representativeEmbedding,
-      threshold: 0.35
-    });
-
-    if(isMatch.data.isDuplicate){
-      throw new ApiError(StatusCodes.BAD_REQUEST, "Employee with same embeddings already exists", isMatch.data);
-    }
-
-    const uploadedKeys = await this.employeeMinioService.uploadEmployeeImages(dto.name, [file]);
-
-    const employee = await EmployeeModel.create({
-      name: dto.name,
-      email: dto.email,
-      department: dto.department,
-      role: dto.role,
-      faceImages: uploadedKeys,
-      meanEmbedding: unknown.representativeEmbedding,
-    });
-
-    await UnknownIdentityModel.findByIdAndUpdate(dto.unknownId, { status: "converted" });
-
-    const promoted = await axios.post(envConfig.unknownPromoteApiUrl, {
-      unknownId: dto.unknownId,
-      employeeId: employee._id.toString(),
-      employeeName: dto.name,
-      embedding: unknown?.representativeEmbedding
-    });
-
-    if(!promoted.data.success) {
-      throw new ApiError(StatusCodes.INTERNAL_SERVER_ERROR, "Failed to promote unknown to employee");
-    }
-
-    return employee;
   }
 }

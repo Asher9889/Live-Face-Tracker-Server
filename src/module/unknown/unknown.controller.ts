@@ -6,6 +6,7 @@ import { StatusCodes } from "http-status-codes";
 import { v4 as uuidv4 } from 'uuid';
 import { IUnknownIdentity, UnknownIdentityModel } from "./unknown-identity.model";
 import axios from "axios";
+import mongoose from "mongoose";
 
 class UnknownController {
     async createUnknownEvent(req: Request, res: Response, next: NextFunction) {
@@ -261,7 +262,10 @@ class UnknownController {
 
 
     mergeUnknown = async (req: Request, res: Response, next: NextFunction) => {
+        const session = await mongoose.startSession();
         try {
+
+            session.startTransaction();
             const { sourceIds } = req.body as MergeUnknownDTO;
 
             if (!sourceIds || sourceIds.length < 2) {
@@ -409,6 +413,8 @@ class UnknownController {
                 }
             );
 
+            await session.commitTransaction();
+
             return ApiResponse.success(res, "Merged successfully", {
                 mergedIdentity,
                 metrics: {
@@ -419,6 +425,7 @@ class UnknownController {
             });
 
         } catch (error) {
+            await session.abortTransaction();
             return next(error);
         }
     };
