@@ -5,8 +5,6 @@ export interface IUnknownEvent {
   gateRole: string;
 
   eventType: "entered" | "exited";
-
-  trackId: number;
   identityId?: Types.ObjectId;
 
   bbox: {
@@ -29,7 +27,6 @@ export interface IUnknownEvent {
 
 const UnknownEventSchema = new Schema<IUnknownEvent>(
   {
-
     cameraCode: { type: String, required: true, index: true },
     gateRole: { type: String, required: true },
 
@@ -38,8 +35,6 @@ const UnknownEventSchema = new Schema<IUnknownEvent>(
       enum: ["entered", "exited"], 
       required: true 
     },
-
-    trackId: { type: Number, required: true },
 
     identityId: {
       type: Schema.Types.ObjectId,
