@@ -1,7 +1,6 @@
 import { Schema, model, Types } from "mongoose";
 
 export interface IUnknownEvent {
-  eventId: string;
   cameraCode: string;
   gateRole: string;
 
@@ -30,7 +29,6 @@ export interface IUnknownEvent {
 
 const UnknownEventSchema = new Schema<IUnknownEvent>(
   {
-    eventId: { type: String, required: true, unique: true },
 
     cameraCode: { type: String, required: true, index: true },
     gateRole: { type: String, required: true },
