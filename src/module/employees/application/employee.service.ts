@@ -153,7 +153,7 @@ export class EmployeeService {
       });
 
       if (!promoted.data.success) {
-        throw new ApiError(StatusCodes.INTERNAL_SERVER_ERROR, "Failed to promote unknown to employee");
+        throw new ApiError(StatusCodes.INTERNAL_SERVER_ERROR, "Failed to promote unknown to employee due to AI Server error");
       }
       session.commitTransaction();
       return employee;

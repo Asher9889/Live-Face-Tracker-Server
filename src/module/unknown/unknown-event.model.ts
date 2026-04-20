@@ -3,15 +3,27 @@ import { Schema, model, Types } from "mongoose";
 export interface IUnknownEvent {
   eventId: string;
   cameraCode: string;
-  // trackerId?: string;
-  reason?: string;
+  gateRole: string;
 
-  timestamp: number;
+  eventType: "entered" | "exited";
 
+  trackId: number;
   identityId?: Types.ObjectId;
 
-  meanEmbedding: number[];
-  imageKey: string;
+  bbox: {
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+  };
+
+  frameTs: number;
+  eventTs: number;
+
+  frameWidth: number;
+  frameHeight: number;
+
+  confidence?: number;
 
   createdAt: Date;
 }
@@ -20,12 +32,16 @@ const UnknownEventSchema = new Schema<IUnknownEvent>(
   {
     eventId: { type: String, required: true, unique: true },
 
-    cameraCode: { type: String, required: true },
-    // trackerId: { type: String, default: "" },
+    cameraCode: { type: String, required: true, index: true },
+    gateRole: { type: String, required: true },
 
-    reason: { type: String, default: "" },
+    eventType: { 
+      type: String, 
+      enum: ["entered", "exited"], 
+      required: true 
+    },
 
-    timestamp: { type: Number, required: true },
+    trackId: { type: Number, required: true },
 
     identityId: {
       type: Schema.Types.ObjectId,
@@ -33,16 +49,29 @@ const UnknownEventSchema = new Schema<IUnknownEvent>(
       index: true,
     },
 
-    meanEmbedding: {
-      type: [Number],
-      required: true,
+    bbox: {
+      x1: Number,
+      y1: Number,
+      x2: Number,
+      y2: Number,
     },
 
-    imageKey: { type: String, required: true },
+    frameTs: { type: Number, required: true },
+    eventTs: { type: Number, required: true },
+
+    frameWidth: Number,
+    frameHeight: Number,
+
+    confidence: { type: Number, default: 0 },
   },
   {
-    timestamps: { createdAt: true, updatedAt: false }, versionKey: false,
+    timestamps: { createdAt: true, updatedAt: false },
+    versionKey: false,
   }
 );
 
-export const UnknownEventModel = model<IUnknownEvent>("UnknownEvent",UnknownEventSchema, "unknown_event");
+export const UnknownEventModel = model<IUnknownEvent>(
+  "UnknownEvent",
+  UnknownEventSchema,
+  "unknown_event"
+);

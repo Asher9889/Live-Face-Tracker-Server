@@ -22,11 +22,8 @@ class UnknownController {
 
     async createUnknownPersonEvents(req: Request, res: Response, next: NextFunction) {
         try {
-            const { cameraCode, timestamp, unknownId, meanEmbedding } = req.body as CreateUnknownPersonEventDTO;
-            const face = req.file;
-
-            if (!face) throw new ApiError(StatusCodes.BAD_REQUEST, "Face is required");
-            const data = await unknownService.createUnknownPersonEvent({ cameraCode, timestamp, unknownId, meanEmbedding }, face);
+            const payloadData = req.body as CreateUnknownPersonEventDTO;
+            const data = await unknownService.createUnknownPersonEvent(payloadData);
 
             return ApiResponse.success(res, "Unknown person event created successfully", data);
         } catch (error) {

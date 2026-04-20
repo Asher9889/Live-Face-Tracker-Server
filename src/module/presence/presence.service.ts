@@ -6,6 +6,8 @@ import { ExitType, PresenceLogType } from "../../domain/types";
 import { envConfig } from "../../config";
 import { DateTime } from "luxon";
 import { miliSecondsToISoDate } from "../../utils";
+import { unknownService } from "../unknown/unknown.module";
+import { CreateUnknownPersonEventDTO } from "../unknown/unknown.types";
 
 export default class PresenceService {
     private presenceMap = new Map<string, RuntimePresence>();
@@ -85,8 +87,8 @@ export default class PresenceService {
         }
     }
 
-    onPersonExit(params: { employeeId: string; cameraCode: string; eventTs: number; confidence: number; }) {
-        const { employeeId, cameraCode, eventTs, confidence } = params;
+    onPersonExit(params: { employeeId: string; cameraCode: string; eventTs: number; confidence: number; gateRole: GateRole }) {
+        const { employeeId, cameraCode, eventTs, confidence, gateRole } = params;
 
         const presence = this.presenceMap.get(employeeId);
         if (!presence || presence.state === "OUT") {
@@ -101,6 +103,11 @@ export default class PresenceService {
 
         this.scheduleExit(presence, timeout, "face_recognition", confidence);
     }
+
+    async onUnknownEntered(params: CreateUnknownPersonEventDTO) {
+        await unknownService.createUnknownPersonEvent(params);
+    }
+
 
     getAllPresence() {
         const allPresence = Array.from(this.presenceMap.values()).map(p => ({

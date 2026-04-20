@@ -18,11 +18,28 @@ const createUnknownIdentityDTO = zod.object({
 
 const createUnknownPersonEventSchema = zod.object({
     cameraCode: zod.string(),
+
+    gateRole: zod.string(), // or zod.nativeEnum(GateRole)
+
+    eventType: zod.enum(["entered", "exited"]),
+    
     unknownId: zod.string(),
 
-    timestamp: zod.string().transform((val) => Number(val)),
-    meanEmbedding: zod.string().transform((val) => JSON.parse(val)).pipe(zod.array(zod.number())),
-})
+    bbox: zod.tuple([
+        zod.number(),
+        zod.number(),
+        zod.number(),
+        zod.number(),
+    ]),
+
+    frameTs: zod.number(),
+    eventTs: zod.number(),
+
+    frameWidth: zod.number(),
+    frameHeight: zod.number(),
+
+    confidence: zod.number().optional().default(0),
+});
 
 const mergeUnknownSchema = zod.object({
     sourceIds: zod
@@ -114,7 +131,7 @@ const createUnknownSchema = zod.object({
         .refine(val => {
             try {
                 const value = JSON.parse(val);
-                return true ;
+                return true;
             }
             catch { return false; }
         }, { message: "Invalid poses JSON" })

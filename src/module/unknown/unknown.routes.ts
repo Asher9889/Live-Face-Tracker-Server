@@ -10,8 +10,8 @@ const router = express.Router();
 
 router.post("/event", uploadFaces, multerErrorHandler, validate(createUnknownSchema), unknownController.createUnknownEvent);
 // For saving unknown events (appeaence)
-router.post("/events", uploadFace, multerSingleFaceErrorHandler, validate(createUnknownPersonEventSchema), unknownController.createUnknownPersonEvents);
-// For Creating new person identity
+router.post("/events", validate(createUnknownPersonEventSchema), unknownController.createUnknownPersonEvents);
+// For Creating new person identity 
 router.post("/", uploadUnknownFaces.any(), uploadUnknownFacesErrorHandler, validate(createUnknownSchema), multerDebugLogger, unknownController.createUnknownIdentity);
 // For Updating existing identity with new appearance
 router.patch("/:unknownId", uploadUnknownFaces.any(), uploadUnknownFacesErrorHandler, validate(updateUnknownSchema), unknownController.updateUnknownIdentity);

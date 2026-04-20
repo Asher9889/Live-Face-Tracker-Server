@@ -9,6 +9,8 @@ import { ApiError } from "../../utils";
 import { StatusCodes } from "http-status-codes";
 import IdentityCacheService from "./identity-cache.service";
 
+const DUPLICATE_WINDOW_MS = 3000;
+
 class UnknownEmbeddingService extends EmbeddingBase {
   constructor(apiUrl: string) {
     super(apiUrl);
@@ -35,7 +37,7 @@ class UnknownService {
   }
 
   getUnknownPersons = async (): Promise<GetUnknownPersonsDTO[]> => {
-    const unknownPersons = await UnknownIdentityModel.find({status: "unknown"}, { representativeEmbedding: 0, createdAt: 0, updatedAt: 0 }).lean();
+    const unknownPersons = await UnknownIdentityModel.find({ status: "unknown" }, { representativeEmbedding: 0, createdAt: 0, updatedAt: 0 }).lean();
     const persons = unknownPersons.map((p) => {
       const { representativeImageKey, _id, ...rest } = p;
 
@@ -99,16 +101,16 @@ class UnknownService {
     }
 
     // Create event record (immutable)
-    await UnknownEventModel.create({
-      eventId,
-      cameraCode: camera_code,
-      // trackerId: pid || tid,
-      reason,
-      timestamp: Number(timestamp),
-      identityId: identityDoc._id,
-      meanEmbedding,
-      imageKey,
-    });
+    // await UnknownEventModel.create({
+    //   eventId,
+    //   cameraCode: camera_code,
+    //   // trackerId: pid || tid,
+    //   reason,
+    //   timestamp: Number(timestamp),
+    //   identityId: identityDoc._id,
+    //   meanEmbedding,
+    //   imageKey,
+    // });
 
     return { eventId, identityId: identityDoc._id };
 
@@ -452,30 +454,79 @@ class UnknownService {
     return { unknownId };
   };
 
-  createUnknownPersonEvent = async (eventData: CreateUnknownPersonEventServiceDTO, face: Express.Multer.File) => {
-    const eventId = uuidv4();
-    const { timestamp, cameraCode, unknownId, meanEmbedding } = eventData;
-    const imageKey = await this.uploadUnknownPersonImage(eventId, face);
+  // createUnknownPersonEvent = async (eventData: CreateUnknownPersonEventDTO) => {
 
-    const savedUnknown = await UnknownIdentityModel.findById(unknownId);
-    if (!savedUnknown) throw new ApiError(StatusCodes.NOT_FOUND, "Unknown identity not found");
 
-    savedUnknown.eventCount += 1;
-    savedUnknown.lastSeen = timestamp;
-    await savedUnknown.save();
+  // }
 
-    await UnknownEventModel.create({
-      eventId,
-      cameraCode,
-      identityId: unknownId,
-      timestamp: timestamp,
-      imageKey,
-      meanEmbedding
-    });
+  createUnknownPersonEvent = async (eventData: CreateUnknownPersonEventDTO) => {
+    const { cameraCode, gateRole, eventType, unknownId, bbox, frameTs, eventTs, frameWidth, frameHeight, confidence = 0} = eventData;
 
-    return { eventId, unknownId };
+    try {
 
-  }
+      const identity = await UnknownIdentityModel.findById(unknownId);
+      if (!identity) {
+        // Handle case where unknown identity doesn't exist
+        throw new ApiError(StatusCodes.NOT_FOUND, "Unknown identity not found");
+      }
+      identity.lastSeen = eventTs;
+      identity.eventCount += 1;
+      await identity.save();
+
+
+
+
+      // 1. Dedup check
+      const existing = await UnknownEventModel.findOne({
+        cameraCode,
+        eventType,
+        eventTs: { $gte: eventTs - DUPLICATE_WINDOW_MS },
+      })
+        .sort({ eventTs: -1 })
+        .lean();
+
+      if (existing) {
+        // skip duplicate
+        return {
+          success: true,
+          skipped: true,
+          reason: "duplicate_event",
+        };
+      }
+
+      const [x1, y1, x2, y2] = bbox;
+      const event = await UnknownEventModel.create({
+        cameraCode,
+        gateRole,
+        eventType,
+
+        identityId: unknownId,
+
+        bbox: { x1, y1, x2, y2 },
+
+        frameTs,
+        eventTs,
+
+        frameWidth,
+        frameHeight,
+
+        confidence,
+      });
+
+      return {
+        success: true,
+        data: event,
+      };
+
+    } catch (error) {
+      console.error("[UnknownEventService] create failed:", error);
+
+      return {
+        success: false,
+        error: "FAILED_TO_CREATE_UNKNOWN_EVENT",
+      };
+    }
+  };
 
   findAllEmbeddings = async (): Promise<UnknownEmbeddingDTO[]> => {
     try {

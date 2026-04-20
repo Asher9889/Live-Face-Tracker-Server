@@ -5,7 +5,7 @@ import { wsServer } from "./initStream";
 import normalizeBBox from "./normalizeBBox";
 
 type FaceBBoxPayload = {
-    event: "track_update" | "track_lost" | "person_update" | "person_entered" | "person_exited";
+    event: "track_update" | "track_lost" | "person_update" | "person_entered" | "person_exited" | "unknown_entered" | "unknown_exited";
     camera_code: string;
     track_id: number;
     bbox: [number, number, number, number];
@@ -39,6 +39,8 @@ export default function initCameraBBoxSubscriber() {
         if(payload.event === "person_entered") {
             console.log("[Event] person_entered event happened for person", payload.person_id);
         }
+
+        // Broadcast the event to WebSocket clients 
         wsServer.broadcast({
             type: WS_EVENTS.FACE_BBOX,
             payload: {
@@ -55,14 +57,27 @@ export default function initCameraBBoxSubscriber() {
             }
         });
 
+        const gateRole = camera_code?.startsWith("entry") ? "ENTRY" :  "EXIT";
+
         switch (payload.event) {
             case "person_entered":
-                presenceService.onPersonEntered({ employeeId: person_id!!, cameraCode: payload.camera_code, gateRole: "ENTRY", eventTs: eventTs, confidence: payload?.similarity ?? 0 });
+                presenceService.onPersonEntered({ employeeId: person_id!!, cameraCode: payload.camera_code, gateRole: gateRole, eventTs: eventTs, confidence: payload?.similarity ?? 0 });
                 break;
 
             case "person_exited": // person_exit
-                presenceService.onPersonExit({ employeeId: person_id!!, cameraCode: payload.camera_code, eventTs: eventTs, confidence: payload?.similarity ?? 0 });
-                break;    
+                presenceService.onPersonExit({ employeeId: person_id!!, cameraCode: payload.camera_code, gateRole: gateRole, eventTs: eventTs, confidence: payload?.similarity ?? 0 });
+                break;                                                                               
+            case "unknown_entered": {
+                const unknownId = payload.person_id;
+
+                if (!unknownId) {
+                    console.warn("[WARN] Skipping unknown_entered event without person_id", payload);
+                    break;
+                }
+
+                presenceService.onUnknownEntered({ cameraCode: payload.camera_code, eventType: "entered", gateRole: gateRole, unknownId, bbox: payload.bbox, eventTs: eventTs, frameTs: payload.frameTs, frameWidth: payload.frame_width, frameHeight: payload.frame_height, confidence: payload?.similarity ?? 0 });
+                break;
+            }
             // case "person_update": 
             //     presenceService.onPersonUpdate({ employeeId: person_id!!, trackId: track_id, eventTs: eventTs });
             //     break;
