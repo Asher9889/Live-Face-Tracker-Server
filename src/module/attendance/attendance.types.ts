@@ -1,5 +1,11 @@
 import z from "zod";
-import { attendanceEventsQuerySchema } from "./attendance.validation";
+import {
+  attendanceCalendarQuerySchema,
+  attendanceEmployeeExportQuerySchema,
+  attendanceEmployeeSummaryQuerySchema,
+  attendanceEmployeeTimelineQuerySchema,
+  attendanceEventsQuerySchema,
+} from "./attendance.validation";
 
 export type AttendenceQueryDTO = {
     cursor: string;
@@ -11,6 +17,10 @@ export type AttendenceQueryDTO = {
 }
 
 export type AttendanceEventsQueryDTO = z.infer<typeof attendanceEventsQuerySchema>;
+export type AttendanceEmployeeTimelineQueryDTO = z.infer<typeof attendanceEmployeeTimelineQuerySchema>;
+export type AttendanceEmployeeSummaryQueryDTO = z.infer<typeof attendanceEmployeeSummaryQuerySchema>;
+export type AttendanceEmployeeCalendarQueryDTO = z.infer<typeof attendanceCalendarQuerySchema>;
+export type AttendanceEmployeeExportQueryDTO = z.infer<typeof attendanceEmployeeExportQuerySchema>;
 
 export type AttendenceFilterDTO = {
     lastChangedAt?: {

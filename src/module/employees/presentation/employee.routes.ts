@@ -16,6 +16,7 @@ router.get("/", validateQuery(employeeQuerySchema), controller.findAllEmployees)
 router.post("/promote", uploadFace, multerSingleFaceErrorHandler, validate(createEmployeeFromUnknownSchema), controller.createEmployeeFromUnknown)
 
 router.get("/embeddings", controller.findAllEmbeddings);
+router.get("/:employeeId", controller.getEmployeeProfileById);
 
 
 export default router;

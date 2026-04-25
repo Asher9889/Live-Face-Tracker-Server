@@ -15,6 +15,7 @@ export default class EmployeeController {
         this.createEmployee = this.createEmployee.bind(this);
         this.findAllEmployees = this.findAllEmployees.bind(this);
         this.findAllEmbeddings = this.findAllEmbeddings.bind(this);
+        this.getEmployeeProfileById = this.getEmployeeProfileById.bind(this);
     }
 
     async createEmployee(req: Request, res: Response, next: NextFunction) {
@@ -55,6 +56,19 @@ export default class EmployeeController {
             return ApiResponse.success(res, "Embeddings fetched successfully", embeddings, StatusCodes.OK)
         } catch (error) {
             console.log("error is:", error)
+            return next(error);
+        }
+    }
+
+    async getEmployeeProfileById(req: Request, res: Response, next: NextFunction) {
+        try {
+            const employeeId = req.params.employeeId;
+            if (!employeeId) {
+                throw new ApiError(StatusCodes.BAD_REQUEST, "Employee ID is required", [{ field: "employeeId", message: "Employee ID is required" }]);
+            }
+            const profile = await this.employeeService.getEmployeeProfileById(employeeId);
+            return ApiResponse.success(res, "Employee profile fetched successfully", profile, StatusCodes.OK);
+        } catch (error) {
             return next(error);
         }
     }

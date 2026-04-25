@@ -15,6 +15,11 @@ export class EmployeeRepository implements IEmployeeRepository {
     return doc ? this.map(doc) : null;
   }
 
+  async findById(id: string) {
+    const doc = await EmployeeModel.findById(id);
+    return doc ? this.map(doc) : null;
+  }
+
   async findAllEmbeddings() {
     const docs = await EmployeeModel.find({},{ name:1, meanEmbedding:1, embeddings: 1, id: 1, _id: 0 }).lean()
     return docs;

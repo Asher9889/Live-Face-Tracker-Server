@@ -103,6 +103,25 @@ export class EmployeeService {
     return this.repo.findAllEmbeddings();
   }
 
+  async getEmployeeProfileById(employeeId: string) {
+    const employee = await this.repo.findById(employeeId);
+    if (!employee) {
+      throw new ApiError(StatusCodes.NOT_FOUND, "Employee not found", [{ field: "employeeId", message: "Employee not found" }]);
+    }
+
+    return {
+      id: employee.id,
+      employeeCode: `EMP-${employee.id.slice(-4).toUpperCase()}`,
+      name: employee.name,
+      department: employee.department,
+      role: employee.role,
+      email: employee.email,
+      avatar: employee.faceImages?.[0] ?? null,
+      joinDate: null,
+      status: "ACTIVE",
+    };
+  }
+
   async createEmployeeFromUnknown(dto: TCreateEmployeeFromUnknownDTO, file: Express.Multer.File | null = null) {
     const session = await mongoose.startSession();
 
