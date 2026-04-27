@@ -4,10 +4,13 @@ import { EntryType, ExitType } from "../../domain/types";
 import PresenceModel from "../presence/presence.model";
 import { DateTime } from "luxon";
 import {
+    AttendanceDateQueryDTO,
+    AttendanceRangeQueryDTO,
     AttendanceEmployeeCalendarQueryDTO,
     AttendanceEmployeeExportQueryDTO,
     AttendanceEmployeeSummaryQueryDTO,
     AttendanceEmployeeTimelineQueryDTO,
+    AttendanceEmployeeSessionQueryDTO,
     AttendanceEventDTO,
     AttendanceEventsQueryDTO,
     AttendenceQueryDTO
@@ -21,6 +24,9 @@ import CameraModel from "../cameras/infrastructure/camera.model";
 import { ApiError } from "../../utils";
 import { StatusCodes } from "http-status-codes";
 import { randomUUID } from "crypto";
+import EmployeeModel from "../employees/infrastructure/employee.model";
+import { UnknownEventModel } from "../unknown/unknown-event.model";
+import ExcelJS from "exceljs";
 
 type StartSessionInput = {
     employeeId: String;
@@ -84,6 +90,7 @@ type ExportJob = {
     status: ExportJobStatus;
     createdAt: number;
     fileName: string;
+    mimeType: string;
     contentBase64: string;
 };
 
@@ -238,14 +245,24 @@ export default class AttendanceService {
     }
 
     async exportEmployeeHistory(employeeId: string, query: AttendanceEmployeeExportQueryDTO) {
-        const { from, to, timezone, async: runAsync } = query;
-        const { csv, fileName } = await this.generateEmployeeHistoryCsv(employeeId, from, to, timezone);
+        const { from, to, timezone, async: runAsync, format } = query;
+        const { rows, headers, fileName } = await this.generateEmployeeHistoryRows(employeeId, from, to, timezone);
+
+        const isXlsx = format === "xlsx";
+        const mimeType = isXlsx
+            ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            : "text/csv";
+        const outputFileName = isXlsx ? fileName.replace(/\.csv$/, ".xlsx") : fileName;
+        const content = isXlsx
+            ? await this.buildEmployeeHistoryXlsx(headers, rows)
+            : this.buildEmployeeHistoryCsv(headers, rows);
 
         if (!runAsync) {
             return {
                 type: "file" as const,
-                fileName,
-                content: csv,
+                fileName: outputFileName,
+                mimeType,
+                content,
             };
         }
 
@@ -254,8 +271,9 @@ export default class AttendanceService {
             jobId,
             status: "QUEUED",
             createdAt: Date.now(),
-            fileName,
-            contentBase64: Buffer.from(csv, "utf-8").toString("base64"),
+            fileName: outputFileName,
+            mimeType,
+            contentBase64: Buffer.from(content).toString("base64"),
         });
 
         return {
@@ -281,115 +299,680 @@ export default class AttendanceService {
         return {
             jobId: job.jobId,
             status: job.status,
-            downloadUrl: `data:text/csv;base64,${job.contentBase64}`,
+            downloadUrl: `data:${job.mimeType};base64,${job.contentBase64}`,
             fileName: job.fileName,
         };
     }
 
     async getAttendanceEvents(filter: AttendanceEventsQueryDTO) {
-        const { from, to, status, type, cursor, limit } = filter;
+        const to = DateTime.now().setZone(filter.timezone).toFormat("yyyy-MM-dd");
+        const from = DateTime.fromISO(to, { zone: filter.timezone }).minus({ days: 3 }).toFormat("yyyy-MM-dd");
+        const result = await this.buildAttendanceEventPage({
+            dateFrom: from,
+            dateTo: to,
+            limit: filter.limit,
+            offset: filter.offset,
+            timezone: filter.timezone,
+            sortBy: "timestamp",
+            sortOrder: "desc",
+            status: [],
+            eventType: [],
+        });
 
-        const today = todayDate(); // "YYYY-MM-DD"
-        // const today = "2026-01-15"; // "YYYY-MM-DD"
-        const isTodayOnly = from === today && to === today;
-        // const isTodayOnly = true
-        // const isPastOnly = to < today;
-        const isPastOnly = false;
-
-        let records: any[] = [];
-
-        if (isTodayOnly) {
-            const aggregationPipeline = this.buildTodayPresencePipeline({ from: today, to: today, status, type, cursor, limit });
-
-            const data = await PresenceModel.aggregate(aggregationPipeline);
-            records = data;
-        }
-
-        if (isPastOnly) {
-
-
-
-        }
-        const hasMore = records.length > limit;
-
-        const data = hasMore ? records.slice(0, limit) : records;
-        const nextCursor = hasMore ? records[records.length - 1]?.lastChangedAt : null;
-        // const nextCursor = data.length > 0 ? data[data.length - 1].lastChangedAt ?? data[data.length - 1].exitAt : null;
-
-        return { attendanceEvents: data, nextCursor, hasMore };
+        return {
+            attendanceEvents: result.events,
+            nextCursor: result.nextCursor,
+            hasMore: result.hasMore,
+        };
     }
 
-    async getEmployeeTodayAttendanceSession(employeeId: string) {
-        const pipeline = this.getEmployeeTodayAttendanceSessionPipeline(employeeId);
-        const raw = await AttendanceModel.aggregate(pipeline);
-        // firstEntry, lastExit , totalDurationMinutes , breakDurationMinutes ,status, flags
-        const data = raw[0];
-        const sessions = raw[0].sessions;
+    async getAttendanceEventsByDate(query: AttendanceDateQueryDTO) {
+        return this.buildAttendanceDateResponse(query);
+    }
 
-        data.firstEntry = sessions[0]?.entryAt;
-        data.lastExit = sessions[sessions.length - 1].exitAt ?? null;
+    async getAttendanceEventsByRange(query: AttendanceRangeQueryDTO) {
+        return this.buildAttendanceRangeResponse(query);
+    }
 
-        const now = Date.now();
+    async getCurrentState(query: any) {
+        const date = query?.date ?? todayDate();
+        const limit = typeof query?.limit === "number" ? query.limit : 100;
+        const offset = typeof query?.offset === "number" ? query.offset : 0;
+        const employeeId = query?.employeeId;
+        const department = query?.department;
+        const registeredOnly = typeof query?.registeredOnly === "boolean" ? query.registeredOnly : true;
+        const includeCompleted = Boolean(query?.includeCompleted);
+        const timezone = query?.timezone ?? "UTC";
+        const sortBy = query?.sortBy ?? "lastSeenAt";
+        const sortOrder = query?.sortOrder === "asc" ? 1 : -1;
+        const isToday = date === todayDate();
 
-        /**
-         * if exitAt and duration present takes totalDurationMs else += now - last.entryAt
-        */
-        let totalDurationMs = 0;
-        for (const s of sessions) {
-            if (s.exitAt && s.durationMs) {
-                totalDurationMs += s.durationMs;
-            } else {
-                // open session (live)
-                totalDurationMs += now - s.entryAt;
+        if (isToday && !includeCompleted) {
+            const status = registeredOnly ? ["VERIFIED"] : [];
+            let filter: any = this.buildTodayQueryFilter({ status, type: [], cursor: null, limit, from: date });
+
+            if (employeeId) {
+                filter = { ...filter, employeeId };
+            }
+
+            if (department) {
+                const deptEmployees = await EmployeeModel.find({ department }, { id: 1, _id: 1 }).lean();
+                const ids = deptEmployees.map((e: any) => e.id).filter(Boolean);
+                const objIds = deptEmployees.map((e: any) => e._id?.toString?.()).filter(Boolean);
+                const combined = [...ids, ...objIds];
+                if (combined.length === 0) return { date, presentEmployees: [], stats: { totalEmployeesPresent: 0, inSession: 0, onBreak: 0, lateArrivals: 0, totalActiveSessions: 0 }, pagination: { limit, offset, total: 0 } };
+                filter = { ...filter, employeeId: { $in: combined } };
+            }
+
+            filter.state = "IN";
+
+            const total = await PresenceModel.countDocuments(filter);
+
+            // map sortBy to actual field
+            const sortFieldMap: Record<string, string> = {
+                firstEntryAt: "lastChangedAt",
+                lastSeenAt: "lastSeenAt",
+                employeeName: "employeeName",
+                department: "department",
+            };
+
+            const sortField = sortFieldMap[sortBy] ?? "lastSeenAt";
+
+            const docs = await PresenceModel.find(filter).sort({ [sortField]: sortOrder }).skip(offset).limit(limit).lean();
+
+            // enrich with employee info where available
+            const employeeIds = docs.map((d: any) => d.employeeId).filter(Boolean);
+            const employees = employeeIds.length > 0 ? await EmployeeModel.find({ $or: [{ id: { $in: employeeIds } }, { _id: { $in: employeeIds.filter((id: any) => ObjectId.isValid(id)).map((id: any) => new ObjectId(id)) } }] }).lean() : [];
+            const empMap = new Map<string, any>();
+            for (const e of employees) {
+                empMap.set(e.id ?? e._id?.toString?.(), e);
+            }
+
+            // compute firstEntryAt per employee by aggregating AttendanceModel for the date
+            const presenceEmployeeIds = docs.map((d: any) => d.employeeId).filter(Boolean);
+            const objIds = presenceEmployeeIds.filter((id: any) => ObjectId.isValid(id)).map((id: any) => new ObjectId(id));
+            const strIds = presenceEmployeeIds.filter((id: any) => !ObjectId.isValid(id));
+
+            let firstEntryMap = new Map<string, number>();
+            if (presenceEmployeeIds.length > 0) {
+                const matchOr: any[] = [];
+                if (objIds.length > 0) matchOr.push({ employeeId: { $in: objIds } });
+                if (strIds.length > 0) matchOr.push({ employeeId: { $in: strIds } });
+
+                if (matchOr.length > 0) {
+                    const agg: any[] = [
+                        { $match: { date, $or: matchOr } },
+                        { $sort: { entryAt: 1 } },
+                        { $group: { _id: "$employeeId", firstEntry: { $first: "$entryAt" } } },
+                    ];
+
+                    const aggRes: any[] = await AttendanceModel.aggregate(agg).allowDiskUse(true).exec();
+                    for (const r of aggRes) {
+                        const key = (r._id && typeof r._id === 'object' && r._id.toString) ? r._id.toString() : String(r._id);
+                        firstEntryMap.set(key, Number(r.firstEntry));
+                    }
+                }
+            }
+
+            const presentEmployees = docs.map((d: any) => {
+                const emp = empMap.get(d.employeeId) ?? null;
+                const firstEntryMs = firstEntryMap.get(d.employeeId?.toString?.() ?? String(d.employeeId)) ?? null;
+                return {
+                    id: d._id?.toString?.() ?? null,
+                    employeeId: d.employeeId ?? null,
+                    employeeCode: emp?.id ?? d.employeeId ?? null,
+                    employeeName: emp?.name ?? d.employeeName ?? "Unknown Person",
+                    employeeAvatar: emp?.faceImages?.[0] ?? d.employeeAvatar ?? null,
+                    department: emp?.department ?? d.department ?? null,
+                    role: emp?.role ?? null,
+                    currentStatus: d.state ?? (d.status === "VERIFIED" ? "PRESENT" : "OUT"),
+                    firstEntryAt: firstEntryMs ? this.toIsoWithZone(firstEntryMs, timezone) : null,
+                    lastSeenAt: d.lastSeenAt ?? d.lastChangedAt ?? null,
+                    currentGate: d.lastCameraCode ?? null,
+                    currentCameraCode: d.lastCameraCode ?? null,
+                    workDurationMinutes: d.workDurationMinutes ?? null,
+                    breakDurationMinutes: d.breakDurationMinutes ?? null,
+                    flags: [],
+                    sessionId: d._id?.toString?.() ?? null,
+                };
+            });
+
+            const inSession = docs.filter((d: any) => d.state === "IN").length;
+
+            return {
+                date,
+                presentEmployees,
+                stats: {
+                    totalEmployeesPresent: total,
+                    inSession,
+                    onBreak: 0,
+                    lateArrivals: 0,
+                    totalActiveSessions: total,
+                },
+                pagination: {
+                    limit,
+                    offset,
+                    total,
+                },
+            };
+        }
+
+        const attendanceMatch: Record<string, any> = { date };
+        const attendanceFilters: Record<string, any>[] = [];
+        if (employeeId) {
+            attendanceFilters.push(this.getEmployeeIdQuery(employeeId));
+        }
+        if (department) {
+            const deptEmployees = await EmployeeModel.find({ department }, { id: 1, _id: 1 }).lean();
+            const ids = deptEmployees.map((e: any) => e.id).filter(Boolean);
+            const objIds = deptEmployees.map((e: any) => e._id?.toString?.()).filter(Boolean);
+            const combined = [...ids, ...objIds];
+            if (combined.length === 0) return { date, presentEmployees: [], stats: { totalEmployeesPresent: 0, inSession: 0, onBreak: 0, lateArrivals: 0, totalActiveSessions: 0 }, pagination: { limit, offset, total: 0 } };
+            attendanceFilters.push({ employeeId: { $in: combined } });
+        }
+
+        if (attendanceFilters.length > 0) {
+            attendanceMatch.$and = attendanceFilters;
+        }
+
+        const sessions = await AttendanceModel.find(attendanceMatch).sort({ entryAt: 1 }).lean();
+        const employeeIds = [...new Set(sessions.map((session: any) => String(session.employeeId)).filter(Boolean))];
+        const employees = employeeIds.length > 0
+            ? await EmployeeModel.find({ $or: [{ _id: { $in: employeeIds.filter((id) => ObjectId.isValid(id)).map((id) => new ObjectId(id)) } }, { id: { $in: employeeIds } }] }).lean()
+            : [];
+        const employeeMap = new Map<string, any>();
+        for (const employee of employees as any[]) {
+            employeeMap.set(employee._id.toString(), employee);
+            if (employee.id) {
+                employeeMap.set(String(employee.id), employee);
             }
         }
-        data.totalDurationMinutes = Number((totalDurationMs / 60000).toFixed(1));
 
-        /**
-         * Break: next.entryAt - previous.exitAt
-         */
+        const grouped = new Map<string, any[]>();
+        for (const session of sessions as any[]) {
+            const key = String(session.employeeId);
+            const list = grouped.get(key) ?? [];
+            list.push(session);
+            grouped.set(key, list);
+        }
+
+        const presentEmployees = Array.from(grouped.entries()).map(([employeeKey, employeeSessions]) => {
+            const emp = employeeMap.get(employeeKey) ?? null;
+            const orderedSessions = [...employeeSessions].sort((left, right) => Number(left.entryAt) - Number(right.entryAt));
+            const firstEntryAt = orderedSessions[0]?.entryAt ?? null;
+            const lastSeenAt = orderedSessions.reduce((max: number | null, session: any) => {
+                const sessionTs = Number(session.exitAt ?? session.entryAt ?? 0);
+                return max === null || sessionTs > max ? sessionTs : max;
+            }, null as number | null);
+            const openSession = orderedSessions.find((session: any) => !session.exitAt);
+
+            return {
+                id: orderedSessions[0]?._id?.toString?.() ?? null,
+                employeeId: emp?.id ?? emp?._id?.toString?.() ?? employeeKey,
+                employeeCode: emp?.id ?? employeeKey,
+                employeeName: emp?.name ?? "Unknown Person",
+                employeeAvatar: emp?.faceImages?.[0] ?? null,
+                department: emp?.department ?? null,
+                role: emp?.role ?? null,
+                currentStatus: openSession ? "IN_SESSION" : "PRESENT",
+                firstEntryAt: firstEntryAt ? this.toIsoWithZone(Number(firstEntryAt), timezone) : null,
+                lastSeenAt,
+                currentGate: openSession?.entryCameraCode ?? orderedSessions[orderedSessions.length - 1]?.exitCameraCode ?? null,
+                currentCameraCode: openSession?.entryCameraCode ?? orderedSessions[orderedSessions.length - 1]?.exitCameraCode ?? null,
+                workDurationMinutes: orderedSessions.reduce((sum: number, session: any) => sum + Number(session.durationMs ?? 0), 0) / 60000,
+                breakDurationMinutes: 0,
+                flags: openSession ? ["MISSING_EXIT"] : [],
+                sessionId: orderedSessions[0]?._id?.toString?.() ?? null,
+            };
+        });
+
+        const total = presentEmployees.length;
+        const sortedEmployees = presentEmployees.sort((left, right) => {
+            const direction = sortOrder === 1 ? 1 : -1;
+            let comparison = 0;
+            if (sortBy === "employeeName") {
+                comparison = String(left.employeeName).localeCompare(String(right.employeeName));
+            } else if (sortBy === "department") {
+                comparison = String(left.department ?? "").localeCompare(String(right.department ?? ""));
+            } else if (sortBy === "firstEntryAt") {
+                comparison = Number(left.firstEntryAt ? DateTime.fromISO(left.firstEntryAt).toMillis() : 0) - Number(right.firstEntryAt ? DateTime.fromISO(right.firstEntryAt).toMillis() : 0);
+            } else {
+                comparison = Number(left.lastSeenAt ?? 0) - Number(right.lastSeenAt ?? 0);
+            }
+
+            if (comparison !== 0) {
+                return comparison * direction;
+            }
+
+            return 0;
+        });
+
+        const paginatedEmployees = sortedEmployees.slice(offset, offset + limit);
+
+        return {
+            date,
+            presentEmployees: paginatedEmployees,
+            stats: {
+                totalEmployeesPresent: total,
+                inSession: sortedEmployees.filter((employee) => employee.currentStatus === "IN_SESSION").length,
+                onBreak: 0,
+                lateArrivals: 0,
+                totalActiveSessions: total,
+            },
+            pagination: {
+                limit,
+                offset,
+                total,
+            },
+        };
+    }
+
+    async getEmployeeTodayAttendanceSession(employeeId: string, query?: AttendanceEmployeeSessionQueryDTO) {
+        const employee = await this.resolveEmployee(employeeId);
+        if (!employee) {
+            throw new ApiError(StatusCodes.NOT_FOUND, "Employee not found", [{ field: "employeeId", message: "Employee not found" }]);
+        }
+
+        const today = query?.date ?? todayDate();
+        const timezone = query?.timezone ?? "UTC";
+        const sessions = await AttendanceModel.find({
+            ...this.getEmployeeIdQuery(employeeId),
+            date: today,
+        }).sort({ entryAt: 1 }).lean();
+
+        const firstEntry = sessions[0]?.entryAt ?? null;
+        const lastClosedExit = [...sessions].reverse().find((session: any) => session.exitAt)?.exitAt ?? null;
+
+        const now = Date.now();
+        let totalDurationMs = 0;
+        for (const session of sessions) {
+            if (typeof session.durationMs === "number" && session.exitAt) {
+                totalDurationMs += session.durationMs;
+            } else {
+                totalDurationMs += Math.max(0, now - Number(session.entryAt));
+            }
+        }
+
         let breakMs = 0;
-        for (let i = 0; i < sessions.length - 1; i++) {
-            const current = sessions[i];
-            const next = sessions[i + 1];
+        for (let index = 0; index < sessions.length - 1; index++) {
+            const current = sessions[index];
+            const next = sessions[index + 1];
+
+            if (!current || !next) continue;
 
             if (!current.exitAt) continue;
 
-            const gap = next.entryAt - current.exitAt;
+            const gap = Number(next.entryAt) - Number(current.exitAt);
             if (gap > 0) breakMs += gap;
         }
 
-        data.breakDurationMinutes = Number((breakMs / 60000).toFixed(1));
-        /**
-         * 
-         */
-
         const hasAnySession = sessions.length > 0;
-        const hasOpenSession = sessions.some((s: any) => !s.exitAt);
-        const allClosed = sessions.every((s: any) => s.exitAt);
-        const isToday = data.date === todayDate();
+        const hasOpenSession = sessions.some((session: any) => !session.exitAt);
+        const allClosed = sessions.every((session: any) => session.exitAt);
 
-        if (!hasAnySession) {
-            data.status = "ABSENT";
-        }
-        else if (hasOpenSession) {
-            data.status = isToday ? "ONGOING" : "INCOMPLETE"; // safety net
-        }
-        else if (allClosed) {
-            data.status = "COMPLETED";
-        }
-        else {
-            data.status = "INCOMPLETE"; // safety net
-        }
+        const status = !hasAnySession
+            ? "INCOMPLETE"
+            : hasOpenSession
+                ? "ONGOING"
+                : allClosed
+                    ? "COMPLETED"
+                    : "INCOMPLETE";
 
-        let flags: AttendanceFlag[] = [];
-        // Flags
-        if (data.firstEntry && data.firstEntry > envConfig.officeStartTime) {
+        const flags: AttendanceFlag[] = [];
+        if (firstEntry && firstEntry > envConfig.officeStartTime) {
             flags.push("LATE_ENTRY");
         }
+        if (lastClosedExit && lastClosedExit < envConfig.officeEndTime) {
+            flags.push("EARLY_EXIT");
+        }
+        if (hasAnySession && sessions.some((session: any) => !session.exitAt)) {
+            flags.push("MISSING_EXIT");
+        }
 
-        data.flags = flags;
-        return data;
+        return {
+            sessionId: `${employeeId}_${today}`,
+            employee: {
+                id: employee.id ?? employee._id?.toString?.() ?? employeeId,
+                name: employee.name,
+                avatar: employee.faceImages?.[0] ?? null,
+                department: employee.department ?? null,
+                role: employee.role ?? null,
+                email: employee.email ?? null,
+            },
+            date: today,
+            firstEntry,
+            lastExit: lastClosedExit,
+            totalDurationMinutes: Math.round(totalDurationMs / 60000),
+            breakDurationMinutes: Math.round(breakMs / 60000),
+            status,
+            flags,
+            sessions: sessions.map((session: any) => ({
+                id: session._id?.toString?.() ?? `${employeeId}_${session.entryAt}`,
+                type: session.exitAt ? "ENTRY" : "ENTRY",
+                entryAt: session.entryAt,
+                exitAt: session.exitAt ?? null,
+                entryCameraCode: session.entryCameraCode ?? null,
+                exitCameraCode: session.exitCameraCode ?? null,
+                entryConfidence: session.entryConfidence ?? null,
+                exitConfidence: session.exitConfidence ?? null,
+                entrySource: session.entrySource ?? null,
+                exitSource: session.exitSource ?? null,
+            })),
+        };
+    }
+
+    private async buildAttendanceDateResponse(query: AttendanceDateQueryDTO) {
+        const result = await this.buildAttendanceEventPage({
+            dateFrom: query.date,
+            dateTo: query.date,
+            limit: query.limit,
+            offset: query.offset,
+            sortBy: query.sortBy,
+            sortOrder: query.sortOrder,
+            timezone: query.timezone,
+            status: query.status,
+            eventType: query.eventType,
+            ...(query.employeeId ? { employeeId: query.employeeId } : {}),
+            ...(query.department ? { department: query.department } : {}),
+            ...(typeof query.isLate === "boolean" ? { isLate: query.isLate } : {}),
+            ...(typeof query.isEarlyExit === "boolean" ? { isEarlyExit: query.isEarlyExit } : {}),
+        });
+
+        return {
+            date: query.date,
+            events: result.events,
+            stats: result.stats,
+            pagination: {
+                limit: query.limit,
+                offset: query.offset,
+                total: result.total,
+            },
+        };
+    }
+
+    private async buildAttendanceRangeResponse(query: AttendanceRangeQueryDTO) {
+        const result = await this.buildAttendanceEventPage({
+            dateFrom: query.dateFrom,
+            dateTo: query.dateTo,
+            limit: query.limit,
+            offset: query.offset,
+            sortBy: query.sortBy,
+            sortOrder: query.sortOrder,
+            timezone: query.timezone,
+            status: query.status,
+            eventType: query.eventType,
+            ...(query.employeeId ? { employeeId: query.employeeId } : {}),
+            ...(query.department ? { department: query.department } : {}),
+            ...(typeof query.isLate === "boolean" ? { isLate: query.isLate } : {}),
+            ...(typeof query.isEarlyExit === "boolean" ? { isEarlyExit: query.isEarlyExit } : {}),
+        });
+
+        return {
+            attendanceEvents: result.events,
+            pagination: {
+                limit: query.limit,
+                offset: query.offset,
+                total: result.total,
+            },
+            nextCursor: result.nextCursor,
+            hasMore: result.hasMore,
+            dateRange: {
+                from: query.dateFrom,
+                to: query.dateTo,
+            },
+        };
+    }
+
+    private async buildAttendanceEventPage(query: {
+        dateFrom: string;
+        dateTo: string;
+        employeeId?: string;
+        department?: string;
+        status: string[];
+        eventType: string[];
+        limit: number;
+        offset: number;
+        sortBy: "timestamp" | "employeeName" | "gate";
+        sortOrder: "asc" | "desc";
+        timezone: string;
+        isLate?: boolean;
+        isEarlyExit?: boolean;
+    }) {
+        const { dayStartMs, dayEndMs } = this.getDateRangeBounds(query.dateFrom, query.dateTo, query.timezone);
+
+        let departmentEmployeeIds: string[] = [];
+        if (query.department) {
+            const departmentEmployees = await EmployeeModel.find({ department: query.department }, { _id: 1 }).lean();
+            departmentEmployeeIds = departmentEmployees.map((employee: any) => employee._id.toString());
+
+            if (query.employeeId) {
+                const employee = await this.resolveEmployee(query.employeeId);
+                if (!employee || !departmentEmployeeIds.includes(employee._id.toString())) {
+                    return this.emptyAttendanceEventPage(query.limit, query.offset);
+                }
+            }
+        }
+
+        const attendanceMatch: Record<string, any> = {
+            date: { $gte: query.dateFrom, $lte: query.dateTo },
+        };
+
+        const attendanceFilters: Record<string, any>[] = [];
+        if (query.employeeId) {
+            attendanceFilters.push(this.getEmployeeIdQuery(query.employeeId));
+        }
+        if (departmentEmployeeIds.length > 0) {
+            attendanceFilters.push({ employeeId: { $in: departmentEmployeeIds.map((value) => new ObjectId(value)) } });
+        }
+
+        if (attendanceFilters.length > 0) {
+            attendanceMatch.$and = attendanceFilters;
+        }
+
+        const sessions = await AttendanceModel.find(attendanceMatch).sort({ entryAt: 1 }).lean();
+
+        const employeeIds = [...new Set(sessions.map((session: any) => String(session.employeeId)).filter(Boolean))];
+        const employees = employeeIds.length > 0
+            ? await EmployeeModel.find({ $or: [{ _id: { $in: employeeIds.filter((id) => ObjectId.isValid(id)).map((id) => new ObjectId(id)) } }, { id: { $in: employeeIds } }] }).lean()
+            : [];
+        const employeeMap = new Map<string, any>();
+        for (const employee of employees as any[]) {
+            employeeMap.set(employee._id.toString(), employee);
+            if (employee.id) {
+                employeeMap.set(String(employee.id), employee);
+            }
+        }
+
+        const includeUnknownEvents = !query.employeeId && departmentEmployeeIds.length === 0;
+        const unknownEvents = includeUnknownEvents
+            ? await UnknownEventModel.find({ eventTs: { $gte: dayStartMs, $lte: dayEndMs } }).sort({ eventTs: 1 }).lean()
+            : [];
+
+        const now = Date.now();
+        const projectedEvents: Array<AttendanceEventDTO & { timestampMs: number }> = [];
+        const uniqueEmployees = new Set<string>();
+        let totalWorkDuration = 0;
+        let lateEntries = 0;
+        let earlyExits = 0;
+
+        for (const session of sessions as any[]) {
+            const employee = employeeMap.get(String(session.employeeId));
+            const employeeId = employee?.id ?? employee?._id?.toString?.() ?? String(session.employeeId);
+            uniqueEmployees.add(employeeId);
+
+            const sharedEmployeeFields = {
+                employeeId,
+                employeeIdToView: employee?.id ?? employeeId,
+                employeeName: employee?.name ?? "Unknown Person",
+                employeeAvatar: employee?.faceImages?.[0] ?? null,
+                department: employee?.department ?? null,
+                designation: employee?.role ?? null,
+                date: session.date,
+            };
+
+            const entryTimestampMs = Number(session.entryAt);
+            const entryEvent: AttendanceEventDTO & { timestampMs: number } = {
+                id: `${session._id?.toString?.() ?? employeeId}_${session.entryAt}_entry`,
+                ...sharedEmployeeFields,
+                timestamp: this.toIsoWithZone(entryTimestampMs, query.timezone),
+                timestampMs: entryTimestampMs,
+                type: "ENTRY",
+                gate: session.entryCameraCode ?? "",
+                status: "VERIFIED",
+                confidence: Number(session.entryConfidence ?? 0),
+                source: this.mapAttendanceSource(session.entrySource),
+                isLate: this.isLateArrival(entryTimestampMs, query.timezone),
+                isEarlyExit: false,
+                lastCameraCode: session.entryCameraCode ?? null,
+                lastChangedAt: entryTimestampMs,
+                lastGate: "ENTRY",
+                lastSeenAt: entryTimestampMs,
+                state: "IN",
+            };
+
+            projectedEvents.push(entryEvent);
+            totalWorkDuration += Number(session.durationMs ?? Math.max(0, now - entryTimestampMs));
+            if (entryEvent.isLate) {
+                lateEntries += 1;
+            }
+
+            if (session.exitAt) {
+                const exitTimestampMs = Number(session.exitAt);
+                const exitEvent: AttendanceEventDTO & { timestampMs: number } = {
+                    id: `${session._id?.toString?.() ?? employeeId}_${session.exitAt}_exit`,
+                    ...sharedEmployeeFields,
+                    timestamp: this.toIsoWithZone(exitTimestampMs, query.timezone),
+                    timestampMs: exitTimestampMs,
+                    type: "EXIT",
+                    gate: session.exitCameraCode ?? "",
+                    status: "VERIFIED",
+                    confidence: Number(session.exitConfidence ?? 0),
+                    source: this.mapAttendanceSource(session.exitSource),
+                    isLate: false,
+                    isEarlyExit: this.isEarlyExit(exitTimestampMs, query.timezone),
+                    lastCameraCode: session.exitCameraCode ?? null,
+                    lastChangedAt: exitTimestampMs,
+                    lastGate: "EXIT",
+                    lastSeenAt: exitTimestampMs,
+                    state: "OUT",
+                };
+
+                projectedEvents.push(exitEvent);
+                if (exitEvent.isEarlyExit) {
+                    earlyExits += 1;
+                }
+            }
+        }
+
+        for (const unknownEvent of unknownEvents as any[]) {
+            const timestampMs = Number(unknownEvent.eventTs ?? unknownEvent.frameTs ?? unknownEvent.createdAt?.valueOf?.() ?? 0);
+            const type = String(unknownEvent.gateRole ?? unknownEvent.eventType ?? "ENTRY").toUpperCase() === "EXIT" || String(unknownEvent.eventType).toLowerCase() === "exited"
+                ? "EXIT"
+                : "ENTRY";
+
+            projectedEvents.push({
+                id: unknownEvent._id?.toString?.() ?? `unknown_${timestampMs}`,
+                employeeId: null,
+                employeeIdToView: null,
+                employeeName: "Unknown Person",
+                employeeAvatar: null,
+                department: null,
+                designation: null,
+                date: this.toAttendenceDate(timestampMs),
+                timestamp: this.toIsoWithZone(timestampMs, query.timezone),
+                timestampMs,
+                type,
+                gate: unknownEvent.cameraCode ?? "",
+                status: "UNKNOWN",
+                confidence: Number(unknownEvent.confidence ?? 0),
+                source: "FACE_AI",
+                isLate: false,
+                isEarlyExit: false,
+                lastCameraCode: unknownEvent.cameraCode ?? null,
+                lastChangedAt: timestampMs,
+                lastGate: type,
+                lastSeenAt: timestampMs,
+                state: type === "EXIT" ? "OUT" : "IN",
+            });
+        }
+
+        const filteredEvents = projectedEvents.filter((event) => {
+            if (query.employeeId && event.employeeId !== query.employeeId && event.employeeIdToView !== query.employeeId) {
+                return false;
+            }
+
+            if (query.status.length > 0 && !query.status.includes(event.status)) {
+                return false;
+            }
+
+            if (query.eventType.length > 0 && !query.eventType.includes(event.type)) {
+                return false;
+            }
+
+            if (typeof query.isLate === "boolean" && Boolean(event.isLate) !== query.isLate) {
+                return false;
+            }
+
+            if (typeof query.isEarlyExit === "boolean" && Boolean(event.isEarlyExit) !== query.isEarlyExit) {
+                return false;
+            }
+
+            return true;
+        });
+
+        filteredEvents.sort((left, right) => {
+            const direction = query.sortOrder === "asc" ? 1 : -1;
+            let comparison = 0;
+
+            if (query.sortBy === "employeeName") {
+                comparison = left.employeeName.localeCompare(right.employeeName);
+            } else if (query.sortBy === "gate") {
+                comparison = left.gate.localeCompare(right.gate);
+            } else {
+                comparison = left.timestampMs - right.timestampMs;
+            }
+
+            if (comparison !== 0) {
+                return comparison * direction;
+            }
+
+            return (left.timestampMs - right.timestampMs) * direction;
+        });
+
+        const total = filteredEvents.length;
+        const events = filteredEvents.slice(query.offset, query.offset + query.limit).map(({ timestampMs, ...rest }) => rest);
+
+        return {
+            events,
+            total,
+            hasMore: query.offset + query.limit < total,
+            nextCursor: query.offset + query.limit < total ? query.offset + query.limit : null,
+            stats: {
+                totalRecords: total,
+                uniqueEmployees: uniqueEmployees.size,
+                totalWorkDuration: Math.round(totalWorkDuration / 60000),
+                unknownEvents: unknownEvents.length,
+                lateEntries,
+                earlyExits,
+            },
+        };
+    }
+
+    private emptyAttendanceEventPage(limit: number, offset: number) {
+        return {
+            events: [],
+            total: 0,
+            hasMore: false,
+            nextCursor: null,
+            stats: {
+                totalRecords: 0,
+                uniqueEmployees: 0,
+                totalWorkDuration: 0,
+                unknownEvents: 0,
+                lateEntries: 0,
+                earlyExits: 0,
+            },
+        };
     }
 
     async openSession(params: StartSessionInput) {
@@ -443,12 +1026,43 @@ export default class AttendanceService {
         }).sort({ entryAt: 1 });
     }
 
-    private toAttendenceDate(ts: number) {
-        const date = luxon.DateTime.fromMillis(ts, { zone: "Asia/Kolkata" }).toFormat("yyyy-MM-dd");
+    private resolveEmployee(employeeId: string) {
+        return EmployeeModel.findOne({
+            $or: [
+                { id: employeeId },
+                ...(ObjectId.isValid(employeeId) ? [{ _id: new ObjectId(employeeId) }] : []),
+            ],
+        }).lean();
+    }
+
+    private getDateRangeBounds(dateFrom: string, dateTo: string, timezone: string) {
+        const from = DateTime.fromISO(dateFrom, { zone: timezone }).startOf("day");
+        const to = DateTime.fromISO(dateTo, { zone: timezone }).endOf("day");
+
+        return {
+            dayStartMs: from.toMillis(),
+            dayEndMs: to.toMillis(),
+        };
+    }
+
+    private mapAttendanceSource(source?: string): "FACE_AI" | "SYSTEM" | "MANUAL" {
+        if (source === "manual" || source === "MANUAL_CORRECTION") return "MANUAL";
+        if (source === "system" || source === "SYSTEM_RECOVERY" || source === "AUTO_EXIT" || source === "EXIT_DETECTED") return "SYSTEM";
+        return "FACE_AI";
+    }
+
+    private isEarlyExit(exitAt: number, timezone: string) {
+        const dt = DateTime.fromMillis(exitAt, { zone: timezone });
+        const msFromMidnight = ((dt.hour * 60) + dt.minute) * 60 * 1000 + (dt.second * 1000) + dt.millisecond;
+        return msFromMidnight < envConfig.officeEndTime;
+    }
+
+    private toAttendenceDate(ts: number, timezone = "Asia/Kolkata") {
+        const date = luxon.DateTime.fromMillis(ts, { zone: timezone }).toFormat("yyyy-MM-dd");
         return date;
     }
 
-    private buildTodayQueryFilter(filter: AttendanceEventsQueryDTO) {
+    private buildTodayQueryFilter(filter: any) {
         const { status, cursor, limit, type } = filter;
 
         let queryFilter: Record<string, any> = {
@@ -474,7 +1088,7 @@ export default class AttendanceService {
         return queryFilter;
     }
 
-    private buildTodayPresencePipeline(filter: AttendanceEventsQueryDTO) {
+    private buildTodayPresencePipeline(filter: any) {
         const { status, type, cursor, limit, from } = filter;
         const pipeline: any[] = [];
 
@@ -567,7 +1181,7 @@ export default class AttendanceService {
         return pipeline;
     }
 
-    private buildPastPipeline(filter: AttendanceEventsQueryDTO) {
+    private buildPastPipeline(filter: any) {
         const { status, type, cursor, limit, from, to } = filter;
         const pipeline: any[] = [];
 
@@ -919,7 +1533,7 @@ export default class AttendanceService {
         return msFromMidnight > envConfig.officeStartTime;
     }
 
-    private async generateEmployeeHistoryCsv(employeeId: string, fromDate: string, toDate: string, timezone: string) {
+    private async generateEmployeeHistoryRows(employeeId: string, fromDate: string, toDate: string, timezone: string) {
         const { dayStartMs } = this.getDayBounds(fromDate, timezone);
         const { dayEndMs } = this.getDayBounds(toDate, timezone);
 
@@ -948,7 +1562,14 @@ export default class AttendanceService {
             };
         });
 
+        const fileName = `attendance_${employeeId}_${fromDate}_to_${toDate}.csv`;
+
         const headers = ["eventId", "timestamp", "type", "cameraId", "cameraCode", "cameraName", "confidence", "status", "source", "note"];
+
+        return { rows, headers, fileName };
+    }
+
+    private buildEmployeeHistoryCsv(headers: string[], rows: Record<string, any>[]) {
         const lines = [headers.join(",")];
 
         rows.forEach((row) => {
@@ -956,10 +1577,22 @@ export default class AttendanceService {
             lines.push(values.join(","));
         });
 
-        const csv = lines.join("\n");
-        const fileName = `attendance_${employeeId}_${fromDate}_to_${toDate}.csv`;
+        return lines.join("\n");
+    }
 
-        return { csv, fileName };
+    private async buildEmployeeHistoryXlsx(headers: string[], rows: Record<string, any>[]) {
+        const workbook = new ExcelJS.Workbook();
+        const sheet = workbook.addWorksheet("Attendance");
+
+        sheet.columns = headers.map((header) => ({
+            header,
+            key: header,
+            width: Math.max(14, header.length + 4),
+        }));
+
+        sheet.addRows(rows);
+        const buffer = await workbook.xlsx.writeBuffer();
+        return Buffer.from(buffer);
     }
 
     private csvEscape(value: string | number) {

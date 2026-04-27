@@ -1,51 +1,117 @@
 import { DateTime } from "luxon";
 import z from "zod";
-import { todayDate } from "../../utils";
+
+const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Invalid date format. Expected YYYY-MM-DD" });
+const monthSchema = z.string().regex(/^\d{4}-\d{2}$/, { error: "Invalid month format. Expected YYYY-MM" });
 
 const parseCSVEnum = (allowed: string[]) =>
-    z.string()
-        .transform(v =>
-            v.split(",")
-                .map(x => x.trim().toUpperCase())
-                .filter(x => allowed.includes(x))
-        );
+    z.string().optional().transform((value) => {
+        if (!value) return [];
 
-const now = todayDate();
+        return value
+            .split(",")
+            .map((item) => item.trim().toUpperCase())
+            .filter((item) => allowed.includes(item));
+    });
 
-export const attendanceEventsQuerySchema = z.object({
-    limit: z.coerce.number().min(1).max(100).default(20),
-    cursor: z.coerce.number().optional(),
-
-    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Invalid date format. Expected YYYY-MM-DD" }).default(now),
-    to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Invalid date format. Expected YYYY-MM-DD" }).default(now),
-
-    type: parseCSVEnum(["ENTRY", "EXIT"]).default(["ENTRY", "EXIT"]),
-    status: parseCSVEnum(["VERIFIED", "UNKNOWN"]).default(["VERIFIED", "UNKNOWN"]),
-});
-
-const timezoneSchema = z.string().default("Asia/Kolkata").refine((tz) => DateTime.now().setZone(tz).isValid, {
+const timezoneSchema = z.string().default("UTC").refine((tz) => DateTime.now().setZone(tz).isValid, {
     error: "Invalid timezone",
 });
 
+const baseAttendanceListQuerySchema = z.object({
+    employeeId: z.string().trim().min(1).optional(),
+    department: z.string().trim().min(1).optional(),
+    status: parseCSVEnum(["VERIFIED", "UNKNOWN", "SUSPICIOUS"]),
+    eventType: parseCSVEnum(["ENTRY", "EXIT"]),
+    limit: z.coerce.number().int().min(1),
+    offset: z.coerce.number().int().min(0),
+    sortBy: z.enum(["timestamp", "employeeName", "gate"]),
+    sortOrder: z.enum(["asc", "desc"]),
+    timezone: timezoneSchema,
+    isLate: z.coerce.boolean().optional(),
+    isEarlyExit: z.coerce.boolean().optional(),
+});
+
+export const attendanceEventsQuerySchema = z.object({
+    limit: z.coerce.number().int().min(1).max(500).default(100),
+    offset: z.coerce.number().int().min(0).default(0),
+    timezone: timezoneSchema,
+});
+
+export const attendanceDateQuerySchema = baseAttendanceListQuerySchema.extend({
+    date: dateSchema,
+    limit: z.coerce.number().int().min(1).max(500).default(50),
+    offset: z.coerce.number().int().min(0).default(0),
+    sortBy: z.enum(["timestamp", "employeeName", "gate"]).default("timestamp"),
+    sortOrder: z.enum(["asc", "desc"]).default("desc"),
+    status: parseCSVEnum(["VERIFIED", "UNKNOWN", "SUSPICIOUS"]),
+    eventType: parseCSVEnum(["ENTRY", "EXIT"]),
+});
+
+export const attendanceRangeQuerySchema = baseAttendanceListQuerySchema.extend({
+    dateFrom: dateSchema,
+    dateTo: dateSchema,
+    limit: z.coerce.number().int().min(1).max(1000).default(100),
+    offset: z.coerce.number().int().min(0).default(0),
+    sortBy: z.enum(["timestamp", "employeeName", "gate"]).default("timestamp"),
+    sortOrder: z.enum(["asc", "desc"]).default("desc"),
+    status: parseCSVEnum(["VERIFIED", "UNKNOWN", "SUSPICIOUS"]),
+    eventType: parseCSVEnum(["ENTRY", "EXIT"]),
+}).superRefine((value, ctx) => {
+    if (value.dateFrom > value.dateTo) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["dateTo"],
+            message: "dateTo must be greater than or equal to dateFrom",
+        });
+    }
+});
+
 export const attendanceEmployeeTimelineQuerySchema = z.object({
-    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Invalid date format. Expected YYYY-MM-DD" }),
+    date: dateSchema,
     timezone: timezoneSchema,
 });
 
 export const attendanceEmployeeSummaryQuerySchema = z.object({
-    month: z.string().regex(/^\d{4}-\d{2}$/, { error: "Invalid month format. Expected YYYY-MM" }),
+    month: monthSchema,
     timezone: timezoneSchema,
 });
 
 export const attendanceCalendarQuerySchema = z.object({
-    month: z.string().regex(/^\d{4}-\d{2}$/, { error: "Invalid month format. Expected YYYY-MM" }),
+    month: monthSchema,
+    timezone: timezoneSchema,
+});
+
+export const attendanceCurrentStateQuerySchema = z.object({
+    date: dateSchema.optional(),
+    employeeId: z.string().trim().min(1).optional(),
+    department: z.string().trim().min(1).optional(),
+    registeredOnly: z.coerce.boolean().optional().default(true),
+    includeCompleted: z.coerce.boolean().optional().default(false),
+    limit: z.coerce.number().int().min(1).max(500).default(100),
+    offset: z.coerce.number().int().min(0).default(0),
+    sortBy: z.enum(["firstEntryAt", "lastSeenAt", "employeeName", "department"]).optional().default("lastSeenAt"),
+    sortOrder: z.enum(["asc", "desc"]).optional().default("desc"),
+    timezone: timezoneSchema,
+});
+
+export const attendanceEmployeeSessionQuerySchema = z.object({
+    date: dateSchema.optional(),
     timezone: timezoneSchema,
 });
 
 export const attendanceEmployeeExportQuerySchema = z.object({
-    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Invalid from date format. Expected YYYY-MM-DD" }),
-    to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, { error: "Invalid to date format. Expected YYYY-MM-DD" }),
-    format: z.enum(["csv"]).default("csv"),
+    from: dateSchema,
+    to: dateSchema,
+    format: z.enum(["csv", "xlsx"]).default("csv"),
     timezone: timezoneSchema,
     async: z.coerce.boolean().optional().default(false),
+}).superRefine((value, ctx) => {
+    if (value.from > value.to) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["to"],
+            message: "to must be greater than or equal to from",
+        });
+    }
 });
