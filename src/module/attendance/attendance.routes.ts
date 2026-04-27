@@ -26,5 +26,6 @@ router.get("/employees/:employeeId/summary", validateQuery(attendanceEmployeeSum
 router.get("/employees/:employeeId/calendar", validateQuery(attendanceCalendarQuerySchema), attendanceController.getEmployeeCalendarByMonth);
 router.get("/employees/:employeeId/export", validateQuery(attendanceEmployeeExportQuerySchema), attendanceController.exportEmployeeHistory);
 router.get("/export-jobs/:jobId", attendanceController.getAttendanceExportJob);
+router.post("/reports/export", (attendanceController as any).exportAttendanceReport);
 
 export default router;

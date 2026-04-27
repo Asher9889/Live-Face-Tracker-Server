@@ -1603,6 +1603,157 @@ export default class AttendanceService {
         return text;
     }
 
+    async exportAttendanceReport(query: any) {
+        const date = query?.date ?? todayDate();
+        const scope = query?.scope ?? "ALL_EMPLOYEES";
+        const format = query?.format ?? "csv";
+        const employeeIds = query?.employeeIds ?? [];
+        const department = query?.department;
+        const registeredOnly = typeof query?.registeredOnly === "boolean" ? query.registeredOnly : true;
+        const timezone = query?.timezone ?? "UTC";
+
+        let targetEmployeeIds: string[] = [];
+
+        if (scope === "SELECTED_EMPLOYEES" && employeeIds.length > 0) {
+            targetEmployeeIds = employeeIds;
+        } else if (scope === "ALL_EMPLOYEES") {
+            const filter: any = {};
+            if (department) {
+                filter.department = department;
+            }
+            const employees = await EmployeeModel.find(filter, { _id: 1, id: 1 }).lean();
+            targetEmployeeIds = employees.map((e: any) => e.id ?? e._id?.toString?.()).filter(Boolean);
+        }
+
+        const attendanceMatch: Record<string, any> = { date };
+        const matchOr: any[] = [];
+        for (const empId of targetEmployeeIds) {
+            if (ObjectId.isValid(empId)) {
+                matchOr.push({ employeeId: new ObjectId(empId) });
+            }
+            matchOr.push({ employeeId: empId });
+        }
+
+        if (matchOr.length > 0) {
+            attendanceMatch.$or = matchOr;
+        }
+
+        const sessions = await AttendanceModel.find(attendanceMatch).sort({ entryAt: 1 }).lean();
+
+        const employeeKeys = [...new Set(sessions.map((s: any) => String(s.employeeId)))];
+        const employees = employeeKeys.length > 0
+            ? await EmployeeModel.find({ $or: [{ id: { $in: employeeKeys } }, { _id: { $in: employeeKeys.filter((id) => ObjectId.isValid(id)).map((id) => new ObjectId(id)) } }] }).lean()
+            : [];
+
+        const empMap = new Map<string, any>();
+        for (const emp of employees) {
+            empMap.set(emp.id ?? emp._id?.toString?.(), emp);
+        }
+
+        const grouped = new Map<string, any[]>();
+        for (const session of sessions as any[]) {
+            const key = String(session.employeeId);
+            const list = grouped.get(key) ?? [];
+            list.push(session);
+            grouped.set(key, list);
+        }
+
+        const rows = Array.from(grouped.entries()).map(([empKey, empSessions]) => {
+            const emp = empMap.get(empKey);
+            const ordered = [...empSessions].sort((l, r) => Number(l.entryAt) - Number(r.entryAt));
+            const firstEntry = ordered[0]?.entryAt;
+            const lastSeen = ordered.reduce((max: number | null, s: any) => {
+                const ts = Number(s.exitAt ?? s.entryAt ?? 0);
+                return max === null || ts > max ? ts : max;
+            }, null);
+            const totalDuration = ordered.reduce((sum: number, s: any) => sum + Number(s.durationMs ?? 0), 0);
+            const isPresent = ordered.length > 0 ? "Yes" : "No";
+            const isLate = firstEntry && firstEntry > envConfig.officeStartTime ? "Yes" : "No";
+            const isEarlyExit = ordered.some((s: any) => s.exitAt && s.exitAt < envConfig.officeEndTime) ? "Yes" : "No";
+
+            return {
+                employeeId: emp?.id ?? empKey,
+                employeeCode: emp?.id ?? empKey,
+                employeeName: emp?.name ?? "Unknown",
+                department: emp?.department ?? "",
+                role: emp?.role ?? "",
+                date,
+                firstEntryAt: firstEntry ? this.toIsoWithZone(Number(firstEntry), timezone) : "",
+                lastSeenAt: lastSeen ? this.toIsoWithZone(lastSeen, timezone) : "",
+                totalWorkDurationMinutes: Math.round(totalDuration / 60000),
+                breakDurationMinutes: 0,
+                currentStatus: ordered.some((s: any) => !s.exitAt) ? "ONGOING" : (ordered.length > 0 ? "COMPLETED" : "ABSENT"),
+                flags: "",
+                present: isPresent,
+                lateArrival: isLate,
+                earlyExit: isEarlyExit,
+            };
+        });
+
+        const headers = [
+            "employeeId",
+            "employeeCode",
+            "employeeName",
+            "department",
+            "role",
+            "date",
+            "firstEntryAt",
+            "lastSeenAt",
+            "totalWorkDurationMinutes",
+            "breakDurationMinutes",
+            "currentStatus",
+            "flags",
+            "present",
+            "lateArrival",
+            "earlyExit",
+        ];
+
+        const isXlsx = format === "xlsx";
+        const mimeType = isXlsx
+            ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            : "text/csv";
+
+        const scopeLabel = scope === "ALL_EMPLOYEES" ? "all-employees" : `employees-${employeeIds.length}`;
+        const fileName = `attendance-report-${scopeLabel}-${date}.${isXlsx ? "xlsx" : "csv"}`;
+
+        const content = isXlsx
+            ? await this.buildAttendanceReportXlsx(headers, rows)
+            : this.buildAttendanceReportCsv(headers, rows);
+
+        return {
+            type: "file" as const,
+            fileName,
+            mimeType,
+            content,
+        };
+    }
+
+    private buildAttendanceReportCsv(headers: string[], rows: Record<string, any>[]) {
+        const lines = [headers.join(",")];
+
+        rows.forEach((row) => {
+            const values = headers.map((header) => this.csvEscape((row as any)[header] ?? ""));
+            lines.push(values.join(","));
+        });
+
+        return lines.join("\n");
+    }
+
+    private async buildAttendanceReportXlsx(headers: string[], rows: Record<string, any>[]) {
+        const workbook = new ExcelJS.Workbook();
+        const sheet = workbook.addWorksheet("Attendance Report");
+
+        sheet.columns = headers.map((header) => ({
+            header,
+            key: header,
+            width: Math.max(14, header.length + 4),
+        }));
+
+        sheet.addRows(rows);
+        const buffer = await workbook.xlsx.writeBuffer();
+        return Buffer.from(buffer);
+    }
+
 
 
 

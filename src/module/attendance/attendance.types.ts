@@ -9,6 +9,7 @@ import {
   attendanceRangeQuerySchema,
   attendanceCurrentStateQuerySchema,
   attendanceEmployeeSessionQuerySchema,
+  attendanceReportExportBodySchema,
 } from "./attendance.validation";
 
 export type AttendenceQueryDTO = {
@@ -28,6 +29,7 @@ export type AttendanceEmployeeSummaryQueryDTO = z.infer<typeof attendanceEmploye
 export type AttendanceEmployeeCalendarQueryDTO = z.infer<typeof attendanceCalendarQuerySchema>;
 export type AttendanceEmployeeExportQueryDTO = z.infer<typeof attendanceEmployeeExportQuerySchema>;
 export type AttendanceCurrentStateQueryDTO = z.infer<typeof attendanceCurrentStateQuerySchema>;
+export type AttendanceReportExportBodyDTO = z.infer<typeof attendanceReportExportBodySchema>;
 export type AttendanceEmployeeSessionQueryDTO = z.infer<typeof attendanceEmployeeSessionQuerySchema>;
 
 export type AttendenceFilterDTO = {

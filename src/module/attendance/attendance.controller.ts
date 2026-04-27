@@ -13,6 +13,7 @@ import {
     AttendanceEventsQueryDTO,
     AttendanceCurrentStateQueryDTO,
     AttendanceEmployeeSessionQueryDTO,
+    AttendanceReportExportBodyDTO,
 } from "./attendance.types";
 
 
@@ -122,5 +123,23 @@ export default class AttendanceController {
 
         const data = await attendanceService.getAttendanceExportJob(jobId);
         return ApiResponse.success(res, "Attendance export job fetched successfully", data, StatusCodes.OK);
+    }
+
+    exportAttendanceReport = async (req: CustomRequest<AttendanceReportExportBodyDTO>, res: Response): Promise<Response | void> => {
+        try {
+            const body = req.body as any;
+            if (!body) throw new ApiError(StatusCodes.BAD_REQUEST, "Request body is required", [{ field: "body", message: "Request body is required" }]);
+
+            const result = await (attendanceService as any).exportAttendanceReport(body);
+            if (result.type === "file") {
+                res.setHeader("Content-Type", result.mimeType ?? "text/csv");
+                res.setHeader("Content-Disposition", `attachment; filename="${result.fileName}"`);
+                return res.status(StatusCodes.OK).send(result.content);
+            }
+
+            return ApiResponse.success(res, "Attendance report export queued", result.data, StatusCodes.ACCEPTED);
+        } catch (error) {
+            throw error;
+        }
     }
 }

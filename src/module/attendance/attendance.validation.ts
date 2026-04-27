@@ -115,3 +115,22 @@ export const attendanceEmployeeExportQuerySchema = z.object({
         });
     }
 });
+
+export const attendanceReportExportBodySchema = z.object({
+    date: dateSchema,
+    scope: z.enum(["ALL_EMPLOYEES", "SELECTED_EMPLOYEES"]),
+    format: z.enum(["csv", "xlsx"]).optional().default("csv"),
+    employeeIds: z.array(z.string().min(1)).optional(),
+    department: z.string().trim().min(1).optional(),
+    registeredOnly: z.coerce.boolean().optional().default(true),
+    includeUnregistered: z.coerce.boolean().optional().default(false),
+    timezone: timezoneSchema,
+}).superRefine((value, ctx) => {
+    if (value.scope === "SELECTED_EMPLOYEES" && (!value.employeeIds || value.employeeIds.length === 0)) {
+        ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["employeeIds"],
+            message: "employeeIds are required when scope is SELECTED_EMPLOYEES",
+        });
+    }
+});
