@@ -61,11 +61,15 @@ export default function initCameraBBoxSubscriber() {
 
         switch (payload.event) {
             case "person_entered":
-                presenceService.onPersonEntered({ employeeId: person_id!!, cameraCode: payload.camera_code, gateRole: gateRole, eventTs: eventTs, confidence: payload?.similarity ?? 0 });
+                void presenceService.onPersonEntered({ employeeId: person_id!!, cameraCode: payload.camera_code, gateRole: gateRole, eventTs: eventTs, confidence: payload?.similarity ?? 0 }).catch((error) => {
+                    console.error("[Presence] person_entered failed", error);
+                });
                 break;
 
             case "person_exited": // person_exit
-                presenceService.onPersonExit({ employeeId: person_id!!, cameraCode: payload.camera_code, gateRole: gateRole, eventTs: eventTs, confidence: payload?.similarity ?? 0 });
+                void presenceService.onPersonExited({ employeeId: person_id!!, cameraCode: payload.camera_code, gateRole: gateRole, eventTs: eventTs, confidence: payload?.similarity ?? 0 }).catch((error) => {
+                    console.error("[Presence] person_exited failed", error);
+                });
                 break;                                                                               
             case "unknown_entered": {
                 const unknownId = payload.person_id;
@@ -75,7 +79,9 @@ export default function initCameraBBoxSubscriber() {
                     break;
                 }
 
-                presenceService.onUnknownEntered({ cameraCode: payload.camera_code, eventType: "entered", gateRole: gateRole, unknownId, bbox: payload.bbox, eventTs: eventTs, frameTs: payload.frameTs, frameWidth: payload.frame_width, frameHeight: payload.frame_height, confidence: payload?.similarity ?? 0 });
+                void presenceService.onUnknownEntered({ cameraCode: payload.camera_code, eventType: "entered", gateRole: gateRole, unknownId, bbox: payload.bbox, eventTs: eventTs, frameTs: payload.frameTs, frameWidth: payload.frame_width, frameHeight: payload.frame_height, confidence: payload?.similarity ?? 0 }).catch((error) => {
+                    console.error("[Presence] unknown_entered failed", error);
+                });
                 break;
             }
             // case "person_update": 

@@ -10,15 +10,18 @@ import { initWSSStreaming, initCameraStatusSubscriber } from "./stream";
 import initCameraBBoxSubscriber from "./stream/initCameraBBoxSubscriber";
 import { initEventHandlers } from "./events/Event";
 import loadCameraConfigsToRedis from "./module/cameras/infrastructure/camera.cache";
-import { presenceController } from "./module/presence/presence.module";
+import { presenceService } from "./module/presence/presence.module";
 import cookieParser from "cookie-parser";
+import "./module/presence/presence.worker";
 
 const Pinologger = createHttpLogger();
 
 connectMongoDB();
 connectRedis();
 loadCameraConfigsToRedis()
-presenceController.recoverFromDBOnStartup();
+void presenceService.recoverFromDBOnStartup().catch((error) => {
+    console.error("[PRESENCE] recovery failed", error);
+});
 
 const app = express();
 const server = http.createServer(app);

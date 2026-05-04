@@ -15,11 +15,13 @@ interface IPresenceSchemaData extends Document {
   // Boundary context
   lastGate: GateRole;       // ENTRY or EXIT
   lastCameraCode: string;   // which camera last saw the person
+
+   pendingExitAt: number | null; // when the pending exit should be executed (if any),
 }
 
 
 const presenceSchema = new mongoose.Schema<IPresenceSchemaData>({
-  employeeId: { type: String, required: true },
+  employeeId: { type: String, required: true, unique: true, index: true },
   state: { type: String, enum: Object.values(PRESENCE_STATE) , required: true },
 
   lastSeenAt: { type: Number, required: true},
@@ -30,10 +32,11 @@ const presenceSchema = new mongoose.Schema<IPresenceSchemaData>({
 
   lastGate: { type: String, enum: Object.values(GATE_ROLE), required: true },
   lastCameraCode: { type: String, required: true, index: true },
+
+  pendingExitAt: { type: Number, default: null },
 }, { versionKey: false , timestamps: true });
 
 presenceSchema.index({ date: 1, lastChangedAt: -1 });
-presenceSchema.index({ employeeId: 1 });
 
 
 const PresenceModel = mongoose.model("employees_presence", presenceSchema, "employees_presence");
