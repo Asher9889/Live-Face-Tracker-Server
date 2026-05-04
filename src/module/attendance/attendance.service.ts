@@ -977,22 +977,30 @@ export default class AttendanceService {
 
     async openSession(params: StartSessionInput) {
         const { employeeId, entryAt, entrySource, entryConfidence, entryCameraCode } = params;
-        const oneSession = await AttendanceModel.findOne({ employeeId, exitAt: { $exists: false } }).lean();
-        if (oneSession) {
-            // it means one session is already active
-            // in there there might some bug exists
-            return;
+        const date = this.toAttendenceDate(entryAt);
+
+        try {
+            await AttendanceModel.findOneAndUpdate(
+                { employeeId, exitAt: { $exists: false }, date },
+                {
+                    $setOnInsert: {
+                        employeeId,
+                        entryAt,
+                        entrySource,
+                        date,
+                        entryConfidence,
+                        entryCameraCode,
+                    },
+                },
+                { upsert: true, new: true, setDefaultsOnInsert: true }
+            ).lean();
+        } catch (error: any) {
+            // Ignore duplicate key errors that can happen under race conditions
+            if (error && (error.code === 11000 || error.code === "E11000")) {
+                return;
+            }
+            throw error;
         }
-        // create new session
-        const newSession = new AttendanceModel({
-            employeeId,
-            entryAt,
-            entrySource,
-            date: this.toAttendenceDate(entryAt),
-            entryConfidence,
-            entryCameraCode,
-        });
-        await newSession.save();
     }
 
     async endSession(params: CloseSessionInput) {

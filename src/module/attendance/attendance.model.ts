@@ -68,6 +68,9 @@ const attendanceSchema = new mongoose.Schema<AttendanceModel>({
     },
 }, { timestamps: true, versionKey: false })
 
+// Prevent duplicate identical sessions for the same employee on the same date/time
+attendanceSchema.index({ employeeId: 1, entryAt: 1, date: 1 }, { unique: true });
+
 const AttendanceModel = mongoose.model<AttendanceModel>('Attendance', attendanceSchema);
 
 export default AttendanceModel;
