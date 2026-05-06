@@ -7,12 +7,17 @@ import { miliSecondsToISoDate } from "../../utils";
 import { unknownService } from "../unknown/unknown.module";
 import { CreateUnknownPersonEventDTO } from "../unknown/unknown.types";
 import presenceQueue from "./presence.queue";
+import { DateTime } from "luxon";
 
 export default class PresenceService {
 
-    constructor(private readonly logService: PresenceLogService) { }
+    private midnightReconcilerTimer: NodeJS.Timeout | null = null;
 
+    constructor(private readonly logService: PresenceLogService) { }
+    
     async recoverFromDBOnStartup() {
+        await this.closeStaleOpenSessionsFromPreviousDays();
+
         const now = Date.now();
         const pendingExits = await PresenceModel.find({
             state: "IN",
@@ -37,30 +42,64 @@ export default class PresenceService {
         }
     }
 
-    async onPersonEntered(params: { employeeId: string; cameraCode: string; gateRole: GateRole; eventTs: number; confidence: number; }) {
-        const { employeeId, cameraCode, eventTs, confidence } = params;
-        const today = miliSecondsToISoDate(eventTs);
+    private async closeStaleOpenSessionsFromPreviousDays() {
+        const boundary = DateTime.now().setZone("Asia/Kolkata").startOf("day");
+        const today = boundary.toFormat("yyyy-MM-dd");
+        const exitTs = boundary.toMillis();
 
-        let presence = await PresenceModel.findOne({ employeeId });
+        const staleOpenPresences = await PresenceModel.find({
+            state: "IN",
+            date: { $lt: today },
+        }).lean();
 
-        // 🔥 STEP 1: Reset stale state (previous day IN → OUT)
-        if (presence && presence.date !== today) {
+        for (const presence of staleOpenPresences as any[]) {
+            const employeeId = String(presence.employeeId);
+            const cameraCode = String(presence.lastCameraCode ?? "SYSTEM");
+            const confidence = typeof presence.confidence === "number" ? presence.confidence : 0;
+
             await PresenceModel.updateOne(
                 { employeeId },
                 {
                     $set: {
                         state: "OUT",
                         pendingExitAt: null,
+                        lastSeenAt: exitTs,
+                        lastChangedAt: exitTs,
                         date: today,
+                        lastGate: "EXIT",
+                        lastCameraCode: cameraCode,
+                        confidence,
                     },
                 }
             );
 
-            console.log("[DAY RESET]", employeeId);
+            await this.logService.insertLog({
+                employeeId,
+                eventType: "SYSTEM_RECOVERY",
+                fromState: "IN",
+                toState: "OUT",
+                cameraCode,
+                occurredAt: exitTs,
+                date: today,
+                source: "system",
+                confidence,
+                note: "Auto closed on startup after midnight",
+            });
 
-            // refresh presence after update
-            presence = await PresenceModel.findOne({ employeeId });
+            await attendanceService.endSession({
+                employeeId,
+                exitAt: exitTs,
+                exitSource: "SYSTEM_RECOVERY",
+                exitCameraCode: cameraCode,
+                exitConfidence: confidence,
+            });
         }
+    }
+
+    async onPersonEntered(params: { employeeId: string; cameraCode: string; gateRole: GateRole; eventTs: number; confidence: number; }) {
+        const { employeeId, cameraCode, eventTs, confidence } = params;
+
+        let presence = await PresenceModel.findOne({ employeeId });
 
         // 🟢 CASE 1: OUT → IN (idempotent safe)
         if (!presence || presence.state === "OUT") {
@@ -125,6 +164,9 @@ export default class PresenceService {
                 }
             );
 
+            // update attendance open session lastSeenAt
+            await attendanceService.updateSessionLastSeen(employeeId, miliSecondsToISoDate(eventTs), eventTs);
+            
             console.log("[CANCEL EXIT]", employeeId);
             return;
         }
@@ -142,6 +184,10 @@ export default class PresenceService {
                 },
             }
         );
+
+        // update attendance open session lastSeenAt for ongoing sessions
+        await attendanceService.updateSessionLastSeen(employeeId, miliSecondsToISoDate(eventTs), eventTs);
+       
     }
 
 

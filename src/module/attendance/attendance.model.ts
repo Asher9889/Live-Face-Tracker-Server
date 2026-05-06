@@ -5,6 +5,7 @@ interface AttendanceModel extends Document {
     employeeId: ObjectId | string;
     entryAt: number;        // timestamp (ms)
     exitAt: number;
+    lastSeenAt?: number;
     durationMs: number;
     entrySource: EntryType;
     exitSource: ExitType;
@@ -37,6 +38,11 @@ const attendanceSchema = new mongoose.Schema<AttendanceModel>({
     exitAt: {
         type: Number,
         required: false,
+    },
+    lastSeenAt: {
+        type: Number,
+        required: false,
+        index: false,
     },
     durationMs: {
         type: Number,

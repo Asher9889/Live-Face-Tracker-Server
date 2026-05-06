@@ -23,6 +23,7 @@ loadCameraConfigsToRedis()
 void presenceService.recoverFromDBOnStartup().catch((error) => {
     console.error("[PRESENCE] recovery failed", error);
 });
+// presenceService.startMidnightReconciler();
 
 const app = express();
 const server = http.createServer(app);

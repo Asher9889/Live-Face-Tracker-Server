@@ -648,7 +648,7 @@ export default class AttendanceService {
             flags,
             sessions: sessions.map((session: any) => ({
                 id: session._id?.toString?.() ?? `${employeeId}_${session.entryAt}`,
-                type: session.exitAt ? "ENTRY" : "ENTRY",
+                type: "ENTRY",
                 entryAt: session.entryAt,
                 exitAt: session.exitAt ?? null,
                 entryCameraCode: session.entryCameraCode ?? null,
@@ -986,6 +986,7 @@ export default class AttendanceService {
                     $setOnInsert: {
                         employeeId,
                         entryAt,
+                        lastSeenAt: entryAt,
                         entrySource,
                         date,
                         entryConfidence,
@@ -1000,6 +1001,20 @@ export default class AttendanceService {
                 return;
             }
             throw error;
+        }
+    }
+
+    async updateSessionLastSeen(employeeId: string, date: string, seenAt: number) {
+        try {
+            console.log(`Updating last seen for employee ${employeeId} on ${date} to ${seenAt}`);
+            const updated = await AttendanceModel.findOneAndUpdate(
+                { employeeId, date, exitAt: { $exists: false } },
+                { $max: { lastSeenAt: seenAt } }, // only update if seenAt is greater than existing lastSeenAt,
+                { sort: { entryAt: -1 } } // 👈 ensures latest session
+            );
+            console.log(`Updated attendance session: ${updated ? updated._id.toString() : "none"}`);
+        } catch (error) {
+            // ignore
         }
     }
 
