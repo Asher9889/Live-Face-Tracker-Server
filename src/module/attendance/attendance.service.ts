@@ -1019,7 +1019,7 @@ export default class AttendanceService {
     }
 
     async endSession(params: CloseSessionInput) {
-        let { employeeId, exitAt, exitSource, exitCameraCode } = params;
+        let { employeeId, exitAt, exitSource, exitCameraCode, exitConfidence } = params;
         const openSession = await AttendanceModel.findOne({ employeeId, exitAt: { $exists: false } });
         if (!openSession) {
             // it means none session is active
@@ -1035,6 +1035,7 @@ export default class AttendanceService {
         openSession.exitAt = exitAt;
         openSession.exitSource = exitSource;
         openSession.exitCameraCode = exitCameraCode;
+        openSession.exitConfidence = exitConfidence;
         openSession.durationMs = durationMs;
 
         await openSession.save();
