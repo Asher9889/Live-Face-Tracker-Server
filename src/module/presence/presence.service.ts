@@ -9,7 +9,7 @@ import { CreateUnknownPersonEventDTO } from "../unknown/unknown.types";
 import presenceQueue from "./presence.queue";
 
 export default class PresenceService {
-   
+
     constructor(private readonly logService: PresenceLogService) { }
 
     async recoverFromDBOnStartup() {
@@ -39,14 +39,34 @@ export default class PresenceService {
 
     async onPersonEntered(params: { employeeId: string; cameraCode: string; gateRole: GateRole; eventTs: number; confidence: number; }) {
         const { employeeId, cameraCode, eventTs, confidence } = params;
+        const today = miliSecondsToISoDate(eventTs);
 
-        const presence = await PresenceModel.findOne({ employeeId });
+        let presence = await PresenceModel.findOne({ employeeId });
+
+        // 🔥 STEP 1: Reset stale state (previous day IN → OUT)
+        if (presence && presence.date !== today) {
+            await PresenceModel.updateOne(
+                { employeeId },
+                {
+                    $set: {
+                        state: "OUT",
+                        pendingExitAt: null,
+                        date: today,
+                    },
+                }
+            );
+
+            console.log("[DAY RESET]", employeeId);
+
+            // refresh presence after update
+            presence = await PresenceModel.findOne({ employeeId });
+        }
 
         // 🟢 CASE 1: OUT → IN (idempotent safe)
         if (!presence || presence.state === "OUT") {
 
             const updated = await PresenceModel.findOneAndUpdate(
-                { employeeId, state: "OUT" }, // 🔥 guard
+                { employeeId }, // 🔥 guard
                 {
                     $set: {
                         state: "IN",

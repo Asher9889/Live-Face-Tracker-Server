@@ -8,6 +8,7 @@ import apiRouter from "./routes";
 import http from "http";
 import { initWSSStreaming, initCameraStatusSubscriber } from "./stream";
 import initCameraBBoxSubscriber from "./stream/initCameraBBoxSubscriber";
+import initAttendanceStreamConsumer from "./stream/consumers/initAttendanceStreamConsumer";
 import { initEventHandlers } from "./events/Event";
 import loadCameraConfigsToRedis from "./module/cameras/infrastructure/camera.cache";
 import { presenceService } from "./module/presence/presence.module";
@@ -27,6 +28,7 @@ const app = express();
 const server = http.createServer(app);
 
 const allowedOrigins = ["http://localhost:5173", "http://localhost:5174", "http://160.25.62.109:8203", "https://live-face-tracker.mssplonline.in", "https://facevision.mssplonline.in", "https://minio.mssplonline.in"]
+
 app.use(cors({
     origin: function (origin, callback) {
         if (!origin) {
@@ -43,6 +45,9 @@ app.use(cors({
 app.use(Pinologger); 
 
 initEventHandlers(); // for internal event_emitter 
+void initAttendanceStreamConsumer().catch((error) => {
+    console.error("[STREAM] attendance consumer failed to start", error);
+});
 initWSSStreaming(server);
 initCameraStatusSubscriber();
 initCameraBBoxSubscriber();

@@ -1,6 +1,6 @@
 import { redisSub } from "../db";
 import { WS_EVENTS } from "../events";
-import { presenceService } from "../module/presence/presence.module";
+// import { presenceService } from "../module/presence/presence.module";
 import { wsServer } from "./initStream";
 import normalizeBBox from "./normalizeBBox";
 
@@ -57,39 +57,39 @@ export default function initCameraBBoxSubscriber() {
             }
         });
 
-        const gateRole = camera_code?.startsWith("entry") ? "ENTRY" :  "EXIT";
+        // const gateRole = camera_code?.startsWith("entry") ? "ENTRY" :  "EXIT";
 
-        switch (payload.event) {
-            case "person_entered":
-                void presenceService.onPersonEntered({ employeeId: person_id!!, cameraCode: payload.camera_code, gateRole: gateRole, eventTs: eventTs, confidence: payload?.similarity ?? 0 }).catch((error) => {
-                    console.error("[Presence] person_entered failed", error);
-                });
-                break;
+        // switch (payload.event) {
+        //     case "person_entered":
+        //         void presenceService.onPersonEntered({ employeeId: person_id!!, cameraCode: payload.camera_code, gateRole: gateRole, eventTs: eventTs, confidence: payload?.similarity ?? 0 }).catch((error) => {
+        //             console.error("[Presence] person_entered failed", error);
+        //         });
+        //         break;
 
-            case "person_exited": // person_exit
-                void presenceService.onPersonExited({ employeeId: person_id!!, cameraCode: payload.camera_code, gateRole: gateRole, eventTs: eventTs, confidence: payload?.similarity ?? 0 }).catch((error) => {
-                    console.error("[Presence] person_exited failed", error);
-                });
-                break;                                                                               
-            case "unknown_entered": {
-                const unknownId = payload.person_id;
+        //     case "person_exited": // person_exit
+        //         void presenceService.onPersonExited({ employeeId: person_id!!, cameraCode: payload.camera_code, gateRole: gateRole, eventTs: eventTs, confidence: payload?.similarity ?? 0 }).catch((error) => {
+        //             console.error("[Presence] person_exited failed", error);
+        //         });
+        //         break;                                                                               
+        //     case "unknown_entered": {
+        //         const unknownId = payload.person_id;
 
-                if (!unknownId) {
-                    console.warn("[WARN] Skipping unknown_entered event without person_id", payload);
-                    break;
-                }
+        //         if (!unknownId) {
+        //             console.warn("[WARN] Skipping unknown_entered event without person_id", payload);
+        //             break;
+        //         }
 
-                void presenceService.onUnknownEntered({ cameraCode: payload.camera_code, eventType: "entered", gateRole: gateRole, unknownId, bbox: payload.bbox, eventTs: eventTs, frameTs: payload.frameTs, frameWidth: payload.frame_width, frameHeight: payload.frame_height, confidence: payload?.similarity ?? 0 }).catch((error) => {
-                    console.error("[Presence] unknown_entered failed", error);
-                });
-                break;
-            }
-            // case "person_update": 
-            //     presenceService.onPersonUpdate({ employeeId: person_id!!, trackId: track_id, eventTs: eventTs });
-            //     break;
-            // case "track_lost": 
-            //     presenceService.onTrackLost({ employeeId: person_id!!, trackId: track_id, });
-            //     break;
-        }
+        //         void presenceService.onUnknownEntered({ cameraCode: payload.camera_code, eventType: "entered", gateRole: gateRole, unknownId, bbox: payload.bbox, eventTs: eventTs, frameTs: payload.frameTs, frameWidth: payload.frame_width, frameHeight: payload.frame_height, confidence: payload?.similarity ?? 0 }).catch((error) => {
+        //             console.error("[Presence] unknown_entered failed", error);
+        //         });
+        //         break;
+        //     }
+        //     // case "person_update": 
+        //     //     presenceService.onPersonUpdate({ employeeId: person_id!!, trackId: track_id, eventTs: eventTs });
+        //     //     break;
+        //     // case "track_lost": 
+        //     //     presenceService.onTrackLost({ employeeId: person_id!!, trackId: track_id, });
+        //     //     break;
+        // }
     });
 }
