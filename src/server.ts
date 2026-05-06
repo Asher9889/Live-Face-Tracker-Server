@@ -11,7 +11,6 @@ import initCameraBBoxSubscriber from "./stream/initCameraBBoxSubscriber";
 import initAttendanceStreamConsumer from "./stream/consumers/initAttendanceStreamConsumer";
 import { initEventHandlers } from "./events/Event";
 import loadCameraConfigsToRedis from "./module/cameras/infrastructure/camera.cache";
-import { presenceService } from "./module/presence/presence.module";
 import cookieParser from "cookie-parser";
 import "./module/presence/presence.worker";
 
@@ -20,9 +19,7 @@ const Pinologger = createHttpLogger();
 connectMongoDB();
 connectRedis();
 loadCameraConfigsToRedis()
-void presenceService.recoverFromDBOnStartup().catch((error) => {
-    console.error("[PRESENCE] recovery failed", error);
-});
+
 // presenceService.startMidnightReconciler();
 
 const app = express();

@@ -56,5 +56,5 @@ export function startAttendanceCron() {
         } catch (error) {
             console.error("[CRON ERROR]", error);
         }
-    });
+    }, {timezone: "Asia/Kolkata"});
 }
