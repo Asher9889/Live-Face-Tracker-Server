@@ -23,7 +23,7 @@ export function startAttendanceCron() {
             console.log(`[CRON] Found ${openSessions.length} open sessions`);
 
             for (const session of openSessions) {
-                const exitTime = session.entryAt;
+                const exitTime = session.lastSeenAt;
 
                 // 2. Close attendance session
                 await AttendanceModel.updateOne(
@@ -32,7 +32,7 @@ export function startAttendanceCron() {
                         $set: {
                             exitAt: exitTime,
                             isExitMissing: true,
-                            exitSource: "AUTO_CLOSURE"
+                            exitSource: "SYSTEM_RECOVERY"
                         }
                     }
                 );
