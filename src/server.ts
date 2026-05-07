@@ -13,12 +13,14 @@ import { initEventHandlers } from "./events/Event";
 import loadCameraConfigsToRedis from "./module/cameras/infrastructure/camera.cache";
 import cookieParser from "cookie-parser";
 import "./module/presence/presence.worker";
+import { startAttendanceCron } from "./cron";
 
 const Pinologger = createHttpLogger();
 
 connectMongoDB();
 connectRedis();
 loadCameraConfigsToRedis()
+startAttendanceCron();
 
 // presenceService.startMidnightReconciler();
 

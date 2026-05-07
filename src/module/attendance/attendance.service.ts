@@ -41,7 +41,7 @@ type CloseSessionInput = {
     exitAt: number;
     exitSource: ExitType;
     exitCameraCode: string;
-    exitConfidence: number
+    exitConfidence?: number
 }
 
 // internal, NOT exported to frontend
@@ -993,7 +993,7 @@ export default class AttendanceService {
                         entryCameraCode,
                     },
                 },
-                { upsert: true, new: true, setDefaultsOnInsert: true }
+                { upsert: true, new: true, setDefaultsOnInsert: true, sort: { entryAt: -1 } }
             ).lean();
         } catch (error: any) {
             // Ignore duplicate key errors that can happen under race conditions
@@ -1019,26 +1019,37 @@ export default class AttendanceService {
     }
 
     async endSession(params: CloseSessionInput) {
-        let { employeeId, exitAt, exitSource, exitCameraCode, exitConfidence } = params;
-        const openSession = await AttendanceModel.findOne({ employeeId, exitAt: { $exists: false } });
+        const { employeeId, exitAt, exitSource, exitCameraCode, exitConfidence } = params;
+        const openSession = await AttendanceModel.findOneAndUpdate(
+            { employeeId, exitAt: { $exists: false } },
+            {
+                $set: {
+                    exitAt,
+                    exitSource,
+                    exitCameraCode,
+                    ...(typeof exitConfidence === "number" ? { exitConfidence } : {}),
+                },
+                $max: {
+                    lastSeenAt: exitAt,
+                },
+            },
+            { new: true, sort: { entryAt: -1 } }
+        );
         if (!openSession) {
             // it means none session is active
             return;
         }
 
-        if (exitAt < openSession.entryAt) {
-            exitAt = openSession.entryAt;
-        }
+        const durationMs = Math.max(0, exitAt - openSession.entryAt);
 
-        const durationMs = exitAt - openSession.entryAt;
-
-        openSession.exitAt = exitAt;
-        openSession.exitSource = exitSource;
-        openSession.exitCameraCode = exitCameraCode;
-        openSession.exitConfidence = exitConfidence;
-        openSession.durationMs = durationMs;
-
-        await openSession.save();
+        await AttendanceModel.updateOne(
+            { _id: openSession._id },
+            {
+                $set: {
+                    durationMs,
+                },
+            }
+        );
     }
 
     async getAttendanceForEmployee(params: { employeeId: string; fromDate: string; toDate: string; }) {

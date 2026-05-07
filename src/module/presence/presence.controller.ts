@@ -1,6 +1,4 @@
 import { Request, Response } from "express";
-import { ApiResponse } from "../../utils";
-import { StatusCodes } from "http-status-codes";
 import PresenceService from "./presence.service";
 
 

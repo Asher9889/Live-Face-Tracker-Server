@@ -11,90 +11,12 @@ import { DateTime } from "luxon";
 
 export default class PresenceService {
 
-    private midnightReconcilerTimer: NodeJS.Timeout | null = null;
-
     constructor(private readonly logService: PresenceLogService) { }
+
+    private isExitPendingState(state?: string | null) {
+        return state === "EXIT_PENDING" || state === "PENDING_EXIT";
+    }
     
-    // async recoverFromDBOnStartup() {
-    //     await this.closeStaleOpenSessionsFromPreviousDays();
-
-    //     const now = Date.now();
-    //     const pendingExits = await PresenceModel.find({
-    //         state: "IN",
-    //         pendingExitAt: { $ne: null },
-    //     }).lean();
-
-    //     for (const presence of pendingExits as any[]) {
-    //         const employeeId = String(presence.employeeId);
-    //         const exitTs = Number(presence.pendingExitAt);
-    //         const delay = Math.max(0, exitTs - now);
-
-    //         await presenceQueue.add(
-    //             "confirm-exit",
-    //             { employeeId, exitTs },
-    //             {
-    //                 delay,
-    //                 jobId: `exit-${employeeId}-${exitTs}`,
-    //                 removeOnComplete: true,
-    //                 removeOnFail: true,
-    //             }
-    //         );
-    //     }
-    // }
-
-    // private async closeStaleOpenSessionsFromPreviousDays() {
-    //     const boundary = DateTime.now().setZone("Asia/Kolkata").startOf("day");
-    //     const today = boundary.toFormat("yyyy-MM-dd");
-    //     const exitTs = boundary.toMillis();
-
-    //     const staleOpenPresences = await PresenceModel.find({
-    //         state: "IN",
-    //         date: { $lt: today },
-    //     }).lean();
-
-    //     for (const presence of staleOpenPresences as any[]) {
-    //         const employeeId = String(presence.employeeId);
-    //         const cameraCode = String(presence.lastCameraCode ?? "SYSTEM");
-    //         const confidence = typeof presence.confidence === "number" ? presence.confidence : 0;
-
-    //         await PresenceModel.updateOne(
-    //             { employeeId },
-    //             {
-    //                 $set: {
-    //                     state: "OUT",
-    //                     pendingExitAt: null,
-    //                     lastSeenAt: exitTs,
-    //                     lastChangedAt: exitTs,
-    //                     date: today,
-    //                     lastGate: "EXIT",
-    //                     lastCameraCode: cameraCode,
-    //                     confidence,
-    //                 },
-    //             }
-    //         );
-
-    //         await this.logService.insertLog({
-    //             employeeId,
-    //             eventType: "SYSTEM_RECOVERY",
-    //             fromState: "IN",
-    //             toState: "OUT",
-    //             cameraCode,
-    //             occurredAt: exitTs,
-    //             date: today,
-    //             source: "system",
-    //             confidence,
-    //             note: "Auto closed on startup after midnight",
-    //         });
-
-    //         await attendanceService.endSession({
-    //             employeeId,
-    //             exitAt: exitTs,
-    //             exitSource: "SYSTEM_RECOVERY",
-    //             exitCameraCode: cameraCode,
-    //             exitConfidence: confidence,
-    //         });
-    //     }
-    // }
 
     async onPersonEntered(params: { employeeId: string; cameraCode: string; gateRole: GateRole; eventTs: number; confidence: number; }) {
         const { employeeId, cameraCode, eventTs, confidence } = params;
@@ -105,7 +27,7 @@ export default class PresenceService {
         if (!presence || presence.state === "OUT") {
 
             const updated = await PresenceModel.findOneAndUpdate(
-                { employeeId }, // 🔥 guard
+                { employeeId }, 
                 {
                     $set: {
                         state: "IN",
@@ -149,13 +71,14 @@ export default class PresenceService {
         }
 
         // 🟡 CASE 2: cancel exit
-        if (presence.pendingExitAt) {
+        if (this.isExitPendingState(presence.state)) {
             await PresenceModel.updateOne(
                 { employeeId },
                 {
                     $set: {
                         lastSeenAt: eventTs,
                         lastChangedAt: eventTs,
+                        state: "IN",
                         pendingExitAt: null,
                         lastGate: "ENTRY",
                         lastCameraCode: cameraCode,
@@ -198,10 +121,16 @@ export default class PresenceService {
 
         if (!presence || presence.state === "OUT") return;
 
+        if (this.isExitPendingState(presence.state)) {
+            console.log("[EXIT DUPLICATE IGNORED]", employeeId);
+            return;
+        }
+
         await PresenceModel.updateOne(
             { employeeId },
             {
                 $set: {
+                    state: "EXIT_PENDING",
                     pendingExitAt: eventTs,
                     lastSeenAt: eventTs,
                     lastChangedAt: eventTs,
@@ -212,14 +141,12 @@ export default class PresenceService {
             }
         );
 
-        await presenceQueue.add(
-            "confirm-exit",
-            { employeeId, exitTs: eventTs },
+        await presenceQueue.add("confirm-exit", { employeeId, exitTs: eventTs },
             {
                 delay: envConfig.exitTimeoutAfterExitGate,
                 jobId: `exit-${employeeId}-${eventTs}`,
                 removeOnComplete: true,
-                removeOnFail: true,
+                removeOnFail: false,
             }
         );
 

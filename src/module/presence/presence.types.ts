@@ -1,6 +1,8 @@
 export const PRESENCE_STATE = {
   IN: "IN",
   OUT: "OUT",
+  EXIT_PENDING: "EXIT_PENDING",
+  PENDING_EXIT: "PENDING_EXIT",
 } as const;
 
 export const GATE_ROLE = {
@@ -24,7 +26,7 @@ export interface RuntimePresence {
 // Inside to outside world.
 export type PresenceDTO = {
   employeeId: string;
-  state: "IN" | "OUT";
+  state: "IN" | "OUT" | "EXIT_PENDING" | "PENDING_EXIT";
   lastSeenAt: number;
   lastGate: "ENTRY" | "EXIT";
   entryCameraCode?: string;
