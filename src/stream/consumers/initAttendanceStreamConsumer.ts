@@ -127,9 +127,12 @@ export default async function initAttendanceStreamConsumer() {
                 continue;
             }
 
+            console.log("[STREAM] Received stream messages", { response });
+
             for (const [, entries] of response) {
                 for (const [messageId, fields] of entries) {
                     const streamMessage = normalizeMessage(fields);
+                    console.log("[STREAM] Normalized message", { messageId, streamMessage });
                     const businessEvent = streamMessage ? toAttendanceEvent(streamMessage) : null;
 
                     if (!streamMessage || !businessEvent) {

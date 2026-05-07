@@ -1010,9 +1010,10 @@ export default class AttendanceService {
             const updated = await AttendanceModel.findOneAndUpdate(
                 { employeeId, date, exitAt: { $exists: false } },
                 { $max: { lastSeenAt: seenAt } }, // only update if seenAt is greater than existing lastSeenAt,
-                { sort: { entryAt: -1 } } // 👈 ensures latest session
-            );
+                { sort: { entryAt: -1 }, new: true } // 👈 ensures latest session, return updated
+            ).lean();
             console.log(`Updated attendance session: ${updated ? updated._id.toString() : "none"}`);
+            return updated;
         } catch (error) {
             // ignore
         }

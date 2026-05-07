@@ -109,7 +109,18 @@ export default class PresenceService {
         );
 
         // update attendance open session lastSeenAt for ongoing sessions
-        await attendanceService.updateSessionLastSeen(employeeId, miliSecondsToISoDate(eventTs), eventTs);
+        const updated = await attendanceService.updateSessionLastSeen(employeeId, miliSecondsToISoDate(eventTs), eventTs);
+        if (!updated) {
+            // No open attendance session found — create one (idempotent guarded in openSession)
+            await attendanceService.openSession({
+                employeeId,
+                entryAt: eventTs,
+                entrySource: "ENTRY_CAMERA",
+                entryConfidence: confidence,
+                entryCameraCode: cameraCode,
+            });
+            console.log("[HEARTBEAT CREATED SESSION]", employeeId);
+        }
        
     }
 
