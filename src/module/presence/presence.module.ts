@@ -6,4 +6,4 @@ const presenceLogService = new PresenceLogService();
 const presenceService = new PresenceService(presenceLogService);
 const presenceController = new PresenceController(presenceService);
 
-export { presenceController, presenceService };
+export { presenceController, presenceService, presenceLogService };

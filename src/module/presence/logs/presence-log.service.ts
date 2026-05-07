@@ -6,7 +6,7 @@ type PresenceLogInput = {
 
   eventType: PresenceLogType;
 
-  fromState?: "IN" | "OUT";
+  fromState?: "IN" | "OUT" | "EXIT_PENDING" | "PENDING_EXIT";
   toState?: "IN" | "OUT";
 
   cameraCode?: string;
