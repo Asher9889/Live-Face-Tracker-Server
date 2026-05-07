@@ -119,6 +119,18 @@ export default class PresenceService {
                 entryConfidence: confidence,
                 entryCameraCode: cameraCode,
             });
+
+            await this.logService.insertLog({
+                    employeeId,
+                    eventType: "ENTRY_DETECTED",
+                    fromState: "OUT",
+                    toState: "IN",
+                    cameraCode,
+                    occurredAt: eventTs,
+                    date: miliSecondsToISoDate(eventTs),
+                    source: "face_recognition",
+                    confidence,
+                });
             console.log("[HEARTBEAT CREATED SESSION]", employeeId);
         }
        
