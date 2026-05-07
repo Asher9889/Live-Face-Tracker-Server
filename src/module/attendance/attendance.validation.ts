@@ -14,7 +14,7 @@ const parseCSVEnum = (allowed: string[]) =>
             .filter((item) => allowed.includes(item));
     });
 
-const timezoneSchema = z.string().default("UTC").refine((tz) => DateTime.now().setZone(tz).isValid, {
+const timezoneSchema = z.string().default("Asia/Kolkata").refine((tz) => DateTime.now().setZone(tz).isValid, {
     error: "Invalid timezone",
 });
 

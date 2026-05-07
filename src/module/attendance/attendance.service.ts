@@ -342,7 +342,7 @@ export default class AttendanceService {
         const department = query?.department;
         const registeredOnly = typeof query?.registeredOnly === "boolean" ? query.registeredOnly : true;
         const includeCompleted = Boolean(query?.includeCompleted);
-        const timezone = query?.timezone ?? "UTC";
+        const timezone = query?.timezone ?? "Asia/Kolkata";
         const sortBy = query?.sortBy ?? "lastSeenAt";
         const sortOrder = query?.sortOrder === "asc" ? 1 : -1;
         const isToday = date === todayDate();
@@ -384,8 +384,8 @@ export default class AttendanceService {
             const employeeIds = docs.map((d: any) => d.employeeId).filter(Boolean);
             const employees = employeeIds.length > 0 ? await EmployeeModel.find({ $or: [{ id: { $in: employeeIds } }, { _id: { $in: employeeIds.filter((id: any) => ObjectId.isValid(id)).map((id: any) => new ObjectId(id)) } }] }).lean() : [];
             const empMap = new Map<string, any>();
-            for (const e of employees) {
-                empMap.set(e.id ?? e._id?.toString?.(), e);
+            for (const emp of employees) {
+                empMap.set(emp.id ?? emp._id?.toString?.(), emp);
             }
 
             // compute firstEntryAt per employee by aggregating AttendanceModel for the date
@@ -501,7 +501,7 @@ export default class AttendanceService {
             const orderedSessions = [...employeeSessions].sort((left, right) => Number(left.entryAt) - Number(right.entryAt));
             const firstEntryAt = orderedSessions[0]?.entryAt ?? null;
             const lastSeenAt = orderedSessions.reduce((max: number | null, session: any) => {
-                const sessionTs = Number(session.exitAt ?? session.entryAt ?? 0);
+                const sessionTs = Number(session.lastSeenAt ?? session.entryAt ?? 0);
                 return max === null || sessionTs > max ? sessionTs : max;
             }, null as number | null);
             const openSession = orderedSessions.find((session: any) => !session.exitAt);
@@ -521,12 +521,14 @@ export default class AttendanceService {
                 currentCameraCode: openSession?.entryCameraCode ?? orderedSessions[orderedSessions.length - 1]?.exitCameraCode ?? null,
                 workDurationMinutes: orderedSessions.reduce((sum: number, session: any) => sum + Number(session.durationMs ?? 0), 0) / 60000,
                 breakDurationMinutes: 0,
+                isLate: firstEntryAt ? this.isLateEntry(firstEntryAt, timezone) : false,
                 flags: openSession ? ["MISSING_EXIT"] : [],
                 sessionId: orderedSessions[0]?._id?.toString?.() ?? null,
             };
         });
 
         const total = presentEmployees.length;
+        const totalLate = presentEmployees.filter((emp) => emp.isLate).length;
         const sortedEmployees = presentEmployees.sort((left, right) => {
             const direction = sortOrder === 1 ? 1 : -1;
             let comparison = 0;
@@ -556,7 +558,7 @@ export default class AttendanceService {
                 totalEmployeesPresent: total,
                 inSession: sortedEmployees.filter((employee) => employee.currentStatus === "IN_SESSION").length,
                 onBreak: 0,
-                lateArrivals: 0,
+                lateArrivals: totalLate,
                 totalActiveSessions: total,
             },
             pagination: {
@@ -1563,6 +1565,17 @@ export default class AttendanceService {
         return count;
     }
 
+    private isLateEntry(entryAt: number, timezone: string = "Asia/Kolkata"): boolean {
+        const entry = DateTime.fromMillis(entryAt).setZone(timezone);
+        const msSinceStartOfDay = entry.diff(entry.startOf("day")).as("milliseconds");
+
+        const isLate = msSinceStartOfDay > envConfig.officeStartTime;
+
+        return isLate;
+    }
+
+
+
     private isLateArrival(timestamp: number, timezone: string) {
         const dt = DateTime.fromMillis(timestamp, { zone: timezone });
         const msFromMidnight = ((dt.hour * 60) + dt.minute) * 60 * 1000;
@@ -1789,6 +1802,8 @@ export default class AttendanceService {
         const buffer = await workbook.xlsx.writeBuffer();
         return Buffer.from(buffer);
     }
+
+
 
 
 

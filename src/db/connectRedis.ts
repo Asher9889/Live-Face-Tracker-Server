@@ -1,12 +1,16 @@
 import Redis from "ioredis";
 import { envConfig } from "../config";
 
-const redis = new Redis({
+
+const redisConfig = {
     host: envConfig.redisHost,
     port: envConfig.redisPort,
     password: envConfig.redisPassword,
     db: envConfig.redisDb,
-});
+    maxRetriesPerRequest: null,
+};
+
+const redis = new Redis(redisConfig);
 
 export function connectRedis(){
     redis.on("connect", () => {
@@ -17,5 +21,6 @@ export function connectRedis(){
     });
 }
 
-export const redisSub = redis.duplicate(); // subscribe only
+const redisSub = redis.duplicate(); // subscribe only
 export default redis;  // commands + publish
+export { redisSub, redisConfig };

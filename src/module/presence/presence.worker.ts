@@ -2,10 +2,10 @@ import { Worker } from "bullmq";
 import IORedis from "ioredis";
 import PresenceModel from "./presence.model";
 import { attendanceService } from "../attendance";
-import { presenceQueueConnection } from "./presence.queue";
 import { envConfig } from "../../config";
+import { redisConfig } from "../../db/connectRedis";
 
-const connection = new IORedis(presenceQueueConnection);
+const connection = new IORedis(redisConfig);
 
 const EXIT_PENDING_STATES = new Set(["EXIT_PENDING", "PENDING_EXIT"]);
 
