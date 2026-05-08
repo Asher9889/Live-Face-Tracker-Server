@@ -50,12 +50,6 @@ export class EmployeeService {
       ]);
     }
 
-    console.log("Received embeddings for employee creation========:", embeddings);
-
-    console.log("Received embeddings from embedding service:", embeddings.raw_embeddings);
-    console.log("Received embeddings from mean service:", embeddings.mean_embedding);
-
-
     dto.embeddings = embeddings.raw_embeddings;   // raw vectors array
     dto.meanEmbedding = embeddings.mean_embedding; // single embedding vector
 
@@ -155,7 +149,7 @@ export class EmployeeService {
         email: dto.email,
         department: dto.department,
         role: dto.role,
-        faceImages: uploadedKeys ?? [unknown.representativeImageKey] ,
+        faceImages: uploadedKeys ?? [unknown.representativeImageKey],
         meanEmbedding: unknown.representativeEmbedding,
       });
 
@@ -179,6 +173,20 @@ export class EmployeeService {
     } catch (error) {
       session.abortTransaction();
       throw error;
+    }
+  }
+  async getEmployeeNotificationData(employeeId: string) {
+    // $slice: 3 it means returns first 3 images from faceImages array. returns data type is array.
+    const data = await EmployeeModel.findOne({ _id: employeeId }, { name: 1, role: 1, department: 1, faceImages: { $slice: 1 } }).lean();
+    if (!data) {
+      throw new ApiError(StatusCodes.NOT_FOUND, "Employee not found", [{ field: "employeeId", message: "Employee not found" }]);
+    }
+    return {
+      id: employeeId,
+      name: data.name,
+      role: data.role,
+      department: data.department,
+      avatar: ( data.faceImages?.[0]) ?  "https://minio.mssplonline.in/" + "facevision/" + data.faceImages[0] : null,
     }
   }
 }

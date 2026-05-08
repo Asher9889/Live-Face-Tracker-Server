@@ -1,5 +1,7 @@
 import { redisSub } from "../db";
 import { WS_EVENTS } from "../events";
+import { TDepartment, TRole } from "../module/employees/domain/employee.constants";
+import { employeeService } from "../module/shared/minio/minio.client";
 // import { presenceService } from "../module/presence/presence.module";
 import { wsServer } from "./initStream";
 import normalizeBBox from "./normalizeBBox";
@@ -17,79 +19,82 @@ type FaceBBoxPayload = {
     similarity?: number;
 };
 
+const knownNotificationEvents = new Set(["person_entered", "person_exited"]);
+const unknownNotificationEvents = new Set(["unknown_entered", "unknown_exited"]);
+
+type NotificationPayload = {
+    name: string;
+    id: string;
+    role: TRole;
+    department: TDepartment;
+    avatar: string | null;
+}
+type employeeId = string;
+
+const notificationEmployeeMap = new Map<employeeId, NotificationPayload>(); // person_id to employeeId mapping for notifications
+
 export default function initCameraBBoxSubscriber() {
     redisSub.psubscribe("live-face-tracker:camera-events:*");
 
-    redisSub.on("pmessage", (_pattern, channel, message) => {
+    redisSub.on("pmessage", async (_pattern, channel, message) => {
         // channel = live-face-tracker:camera-events:entry_1
         const cameraCode = channel.split(":").pop();
 
         const payload: FaceBBoxPayload = JSON.parse(message); // track_update
 
-        const { person_id, camera_code, track_id, bbox, frameTs, eventTs, frame_width, frame_height } = payload;
+        const { person_id, camera_code, track_id, bbox, frameTs, eventTs, frame_width, frame_height, event } = payload;
 
         let normalizedBBox;
         if (payload.event !== "track_lost") {
             normalizedBBox = normalizeBBox(payload.bbox, payload.frame_width, payload.frame_height);
         }
 
-        if(payload.event === "person_exited") {
+        if (payload.event === "person_exited") {
             console.log("[Event] person_exit event happened for person", payload.person_id);
         }
-        if(payload.event === "person_entered") {
+        if (payload.event === "person_entered") {
             console.log("[Event] person_entered event happened for person", payload.person_id);
         }
 
-        // Broadcast the event to WebSocket clients 
-        wsServer.broadcast({
-            type: WS_EVENTS.FACE_BBOX,
-            payload: {
-                event: payload.event,
-                cameraCode,
-                trackId: payload.track_id,
-                personId: payload?.person_id,
-                bbox: normalizedBBox ?? {},
-                frameTs: payload.frameTs,
-                eventTs: payload.eventTs,
-                similarity: payload?.similarity,
-                frameWidth: payload.frame_width,
-                frameHeight: payload.frame_height,
+        if (knownNotificationEvents.has(payload.event)) {
+            console.log(`[Notification] ${payload.event} event for person_id ${payload.person_id} at camera ${cameraCode}`);
+            if (!payload.person_id) {
+                return;
             }
-        });
 
-        // const gateRole = camera_code?.startsWith("entry") ? "ENTRY" :  "EXIT";
+            const notificationPayload = notificationEmployeeMap.get(payload.person_id)
+            if (!notificationPayload) {
+                const data = await employeeService.getEmployeeNotificationData(payload.person_id);
+                notificationEmployeeMap.set(data.id, data);
+            }
 
-        // switch (payload.event) {
-        //     case "person_entered":
-        //         void presenceService.onPersonEntered({ employeeId: person_id!!, cameraCode: payload.camera_code, gateRole: gateRole, eventTs: eventTs, confidence: payload?.similarity ?? 0 }).catch((error) => {
-        //             console.error("[Presence] person_entered failed", error);
-        //         });
-        //         break;
+            wsServer.broadcast({
+                type: WS_EVENTS.UI_EVENT_NOTIFICATION,
+                payload: {
+                    ...notificationEmployeeMap.get(payload.person_id),
+                    cameraCode,
+                }
+            });
+        }
 
-        //     case "person_exited": // person_exit
-        //         void presenceService.onPersonExited({ employeeId: person_id!!, cameraCode: payload.camera_code, gateRole: gateRole, eventTs: eventTs, confidence: payload?.similarity ?? 0 }).catch((error) => {
-        //             console.error("[Presence] person_exited failed", error);
-        //         });
-        //         break;                                                                               
-        //     case "unknown_entered": {
-        //         const unknownId = payload.person_id;
 
-        //         if (!unknownId) {
-        //             console.warn("[WARN] Skipping unknown_entered event without person_id", payload);
-        //             break;
-        //         }
 
-        //         void presenceService.onUnknownEntered({ cameraCode: payload.camera_code, eventType: "entered", gateRole: gateRole, unknownId, bbox: payload.bbox, eventTs: eventTs, frameTs: payload.frameTs, frameWidth: payload.frame_width, frameHeight: payload.frame_height, confidence: payload?.similarity ?? 0 }).catch((error) => {
-        //             console.error("[Presence] unknown_entered failed", error);
-        //         });
-        //         break;
+        // Broadcast the event to WebSocket clients 
+        // wsServer.broadcast({
+        //     type: WS_EVENTS.FACE_BBOX,
+        //     payload: {
+        //         event: payload.event,
+        //         cameraCode,
+        //         trackId: payload.track_id,
+        //         personId: payload?.person_id,
+        //         bbox: normalizedBBox ?? {},
+        //         frameTs: payload.frameTs,
+        //         eventTs: payload.eventTs,
+        //         similarity: payload?.similarity,
+        //         frameWidth: payload.frame_width,
+        //         frameHeight: payload.frame_height,
         //     }
-        //     // case "person_update": 
-        //     //     presenceService.onPersonUpdate({ employeeId: person_id!!, trackId: track_id, eventTs: eventTs });
-        //     //     break;
-        //     // case "track_lost": 
-        //     //     presenceService.onTrackLost({ employeeId: person_id!!, trackId: track_id, });
-        //     //     break;
-        // }
+        // });
+
     });
 }

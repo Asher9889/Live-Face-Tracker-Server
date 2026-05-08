@@ -1,5 +1,6 @@
 import { PresenceLogModel } from "./presence-log.model";
 import { PresenceLogType } from "../../../domain/types";
+import mongoose from "mongoose";
 
 type PresenceLogInput = {
   employeeId: string;
@@ -20,7 +21,7 @@ type PresenceLogInput = {
 
 
 class PresenceLogService {
-  async insertLog(input: PresenceLogInput) {
+  async insertLog(input: PresenceLogInput, session?: mongoose.ClientSession) {
     const occurredAt = input.occurredAt ?? Date.now();
 
     const log = new PresenceLogModel({
@@ -36,7 +37,7 @@ class PresenceLogService {
       note: input.note,
     });
 
-    await log.save();
+    await log.save(session ? { session } : {});
 
     return { logged: true };
   }

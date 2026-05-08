@@ -17,7 +17,7 @@ import {
 } from "./attendance.types";
 import { todayDate } from "../../utils";
 import { ObjectId } from "mongodb";
-import { PipelineStage } from "mongoose";
+import mongoose, { PipelineStage } from "mongoose";
 import { envConfig } from "../../config";
 import { PresenceLogModel } from "../presence/logs/presence-log.model";
 import CameraModel from "../cameras/infrastructure/camera.model";
@@ -41,7 +41,8 @@ type CloseSessionInput = {
     exitAt: number;
     exitSource: ExitType;
     exitCameraCode: string;
-    exitConfidence?: number
+    exitConfidence?: number;
+    session?: any;
 }
 
 // internal, NOT exported to frontend
@@ -977,12 +978,12 @@ export default class AttendanceService {
         };
     }
 
-    async openSession(params: StartSessionInput) {
+    async openSession(params: StartSessionInput, session: mongoose.ClientSession) {
         const { employeeId, entryAt, entrySource, entryConfidence, entryCameraCode } = params;
         const date = this.toAttendenceDate(entryAt);
 
         try {
-            await AttendanceModel.findOneAndUpdate(
+            const updated = await AttendanceModel.findOneAndUpdate(
                 { employeeId, exitAt: { $exists: false }, date },
                 {
                     $setOnInsert: {
@@ -995,8 +996,15 @@ export default class AttendanceService {
                         entryCameraCode,
                     },
                 },
-                { upsert: true, new: true, setDefaultsOnInsert: true, sort: { entryAt: -1 } }
+                { 
+                    upsert: true, 
+                    new: true, 
+                    setDefaultsOnInsert: true, 
+                    sort: { entryAt: -1 }, 
+                    session 
+                }
             ).lean();
+            return updated;
         } catch (error: any) {
             // Ignore duplicate key errors that can happen under race conditions
             if (error && (error.code === 11000 || error.code === "E11000")) {
@@ -1017,7 +1025,7 @@ export default class AttendanceService {
             console.log(`Updated attendance session: ${updated ? updated._id.toString() : "none"}`);
             return updated;
         } catch (error) {
-            // ignore
+            console.log(`Error updating last seen for employee ${employeeId} on ${date}:`, error);
         }
     }
 

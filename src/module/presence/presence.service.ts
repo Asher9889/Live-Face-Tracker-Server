@@ -7,7 +7,9 @@ import { miliSecondsToISoDate } from "../../utils";
 import { unknownService } from "../unknown/unknown.module";
 import { CreateUnknownPersonEventDTO } from "../unknown/unknown.types";
 import presenceQueue from "./presence.queue";
-import { DateTime } from "luxon";
+import mongoose from "mongoose";
+
+
 
 export default class PresenceService {
 
@@ -16,38 +18,151 @@ export default class PresenceService {
     private isExitPendingState(state?: string | null) {
         return state === "EXIT_PENDING" || state === "PENDING_EXIT";
     }
-    
+
 
     async onPersonEntered(params: { employeeId: string; cameraCode: string; gateRole: GateRole; eventTs: number; confidence: number; }) {
-        const { employeeId, cameraCode, eventTs, confidence } = params;
+        try {
+            const { employeeId, cameraCode, eventTs, confidence } = params;
 
-        let presence = await PresenceModel.findOne({ employeeId });
+            let presence = await PresenceModel.findOne({ employeeId });
 
-        // 🟢 CASE 1: OUT → IN (idempotent safe)
-        if (!presence || presence.state === "OUT") {
+            // CASE 1: OUT → IN (or new record)
+            {
+                const session = await mongoose.startSession();
+                try {
+                    session.startTransaction();
+                    if (!presence || presence.state === "OUT") {
 
-            const updated = await PresenceModel.findOneAndUpdate(
-                { employeeId }, 
-                {
-                    $set: {
-                        state: "IN",
-                        lastSeenAt: eventTs,
-                        lastChangedAt: eventTs,
-                        date: miliSecondsToISoDate(eventTs),
-                        lastGate: "ENTRY",
-                        pendingExitAt: null,
-                        lastCameraCode: cameraCode,
-                        confidence,
-                    },
-                },
-                { upsert: true, new: true }
-            );
+                        const updatedPresence = await PresenceModel.findOneAndUpdate(
+                            { employeeId, state: { $ne: "IN" } },
+                            {
+                                $set: {
+                                    state: "IN",
+                                    lastSeenAt: eventTs,
+                                    lastChangedAt: eventTs,
+                                    date: miliSecondsToISoDate(eventTs),
+                                    lastGate: "ENTRY",
+                                    pendingExitAt: null,
+                                    lastCameraCode: cameraCode,
+                                    confidence,
+                                },
+                            },
+                            { upsert: true, new: true, session: session }
+                        );
 
-            if (updated) {
+                        if (!updatedPresence) {
+                            console.warn("Failed to update presence for employee", employeeId);
+                            await session.abortTransaction();
+                            return;
+                        }
+
+                        await attendanceService.openSession({
+                            employeeId,
+                            entryAt: eventTs,
+                            entrySource: "ENTRY_CAMERA",
+                            entryConfidence: confidence,
+                            entryCameraCode: cameraCode,
+                        }, session);
+
+                        await this.logService.insertLog({
+                            employeeId,
+                            eventType: "ENTRY_DETECTED",
+                            fromState: "OUT",
+                            toState: "IN",
+                            cameraCode,
+                            occurredAt: eventTs,
+                            date: miliSecondsToISoDate(eventTs),
+                            source: "face_recognition",
+                            confidence,
+                        }, session);
+                        console.log("[IN]", employeeId);
+                        await session.commitTransaction();
+
+                        console.info({ employeeId, action: "ENTRY_CONFIRMED", cameraCode, confidence });
+
+                        return;
+                    }
+                } catch (error) {
+                    console.error("Error processing entry event for employee", employeeId, error);
+                    await session.abortTransaction();
+                    throw error;
+                } finally {
+                    await session.endSession();
+                }
+            }
+
+
+            // CASE 2: cancel exit
+
+            {
+                const session = await mongoose.startSession();
+                try {
+                    session.startTransaction();
+
+                    if (this.isExitPendingState(presence?.state)) {
+                        await PresenceModel.findOneAndUpdate(
+                            { employeeId, state: { $in: ["EXIT_PENDING", "PENDING_EXIT"] } },
+                            {
+                                $set: {
+                                    lastSeenAt: eventTs,
+                                    lastChangedAt: eventTs,
+                                    state: "IN",
+                                    pendingExitAt: null,
+                                    lastGate: "ENTRY",
+                                    lastCameraCode: cameraCode,
+                                    confidence,
+                                },
+                            }, { session: session }
+                        );
+
+                        await this.logService.insertLog({
+                            employeeId,
+                            eventType: "EXIT_CANCELLED",
+                            fromState: "EXIT_PENDING",
+                            toState: "IN",
+                            cameraCode,
+                            occurredAt: eventTs,
+                            date: miliSecondsToISoDate(eventTs),
+                            source: "face_recognition",
+                            confidence,
+                        }, session);
+
+                        // update attendance open session lastSeenAt
+                        // await attendanceService.updateSessionLastSeen(employeeId, miliSecondsToISoDate(eventTs), eventTs);
+
+                        console.log("[CANCEL EXIT]", employeeId);
+                        await session.commitTransaction();
+                        return;
+                    }
+
+                } catch (error) {
+                    await session.abortTransaction();
+                    console.info({ employeeId, action: "EXIT_CANCELLED", cameraCode, confidence, error });
+                    throw error;
+                } finally {
+                    await session.endSession();
+                }
+            }
+
+            // CASE 3: heartbeat + log
+            try {
+                await PresenceModel.findOneAndUpdate(
+                    { employeeId, state: "IN" },
+                    {
+                        $set: {
+                            lastSeenAt: eventTs,
+                            lastChangedAt: eventTs,
+                            lastGate: "ENTRY",
+                            lastCameraCode: cameraCode,
+                            confidence,
+                        },
+                    }
+                );
+
                 await this.logService.insertLog({
                     employeeId,
-                    eventType: "ENTRY_DETECTED",
-                    fromState: "OUT",
+                    eventType: "FACE_DETECTED",
+                    fromState: "IN",
                     toState: "IN",
                     cameraCode,
                     occurredAt: eventTs,
@@ -56,84 +171,13 @@ export default class PresenceService {
                     confidence,
                 });
 
-                await attendanceService.openSession({
-                    employeeId,
-                    entryAt: eventTs,
-                    entrySource: "ENTRY_CAMERA",
-                    entryConfidence: confidence,
-                    entryCameraCode: cameraCode,
-                });
 
-                console.log("[IN]", employeeId);
+            } catch (error) {
+                throw error;
             }
-
-            return;
+        } catch (error) {
+            throw error;
         }
-
-        // 🟡 CASE 2: cancel exit
-        if (this.isExitPendingState(presence.state)) {
-            await PresenceModel.updateOne(
-                { employeeId },
-                {
-                    $set: {
-                        lastSeenAt: eventTs,
-                        lastChangedAt: eventTs,
-                        state: "IN",
-                        pendingExitAt: null,
-                        lastGate: "ENTRY",
-                        lastCameraCode: cameraCode,
-                        confidence,
-                    },
-                }
-            );
-
-            // update attendance open session lastSeenAt
-            await attendanceService.updateSessionLastSeen(employeeId, miliSecondsToISoDate(eventTs), eventTs);
-            
-            console.log("[CANCEL EXIT]", employeeId);
-            return;
-        }
-
-        // 🔵 CASE 3: heartbeat
-        await PresenceModel.updateOne(
-            { employeeId },
-            {
-                $set: {
-                    lastSeenAt: eventTs,
-                    lastChangedAt: eventTs,
-                    lastGate: "ENTRY",
-                    lastCameraCode: cameraCode,
-                    confidence,
-                },
-            }
-        );
-
-        // update attendance open session lastSeenAt for ongoing sessions
-        const updated = await attendanceService.updateSessionLastSeen(employeeId, miliSecondsToISoDate(eventTs), eventTs);
-        if (!updated) {
-            // No open attendance session found — create one (idempotent guarded in openSession)
-            await attendanceService.openSession({
-                employeeId,
-                entryAt: eventTs,
-                entrySource: "ENTRY_CAMERA",
-                entryConfidence: confidence,
-                entryCameraCode: cameraCode,
-            });
-
-            await this.logService.insertLog({
-                    employeeId,
-                    eventType: "ENTRY_DETECTED",
-                    fromState: "OUT",
-                    toState: "IN",
-                    cameraCode,
-                    occurredAt: eventTs,
-                    date: miliSecondsToISoDate(eventTs),
-                    source: "face_recognition",
-                    confidence,
-                });
-            console.log("[HEARTBEAT CREATED SESSION]", employeeId);
-        }
-       
     }
 
 
@@ -142,7 +186,10 @@ export default class PresenceService {
 
         const presence = await PresenceModel.findOne({ employeeId });
 
-        if (!presence || presence.state === "OUT") return;
+        if (!presence || presence.state === "OUT") {
+            console.log("[EXIT IGNORED] due to already out", employeeId);
+            return
+        };
 
         if (this.isExitPendingState(presence.state)) {
             console.log("[EXIT DUPLICATE IGNORED]", employeeId);
