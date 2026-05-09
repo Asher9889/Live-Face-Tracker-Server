@@ -78,9 +78,9 @@ export default class PresenceService {
                         console.log("[IN]", employeeId);
                         await session.commitTransaction();
 
-                        console.info({ employeeId, action: "ENTRY_CONFIRMED", cameraCode, confidence });
+                        console.log({ employeeId, action: "ENTRY_CONFIRMED", cameraCode, confidence });
 
-                        return;
+                        return; 
                     }
                 } catch (error) {
                     console.error("Error processing entry event for employee", employeeId, error);

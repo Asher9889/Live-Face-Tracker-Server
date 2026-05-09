@@ -14,6 +14,7 @@ const EventNames = {
 export const RedisEventNames = {
   EMPLOYEE_CREATED: "live-face-tracker:employee:created",
   CAMERA_STATE : (cameraId: string) =>  `live-face-tracker:camera-event:${cameraId}:status`,
+  CAMERA_CONFIG: (cameraId: string) => `live-face-tracker:camera:${cameraId}:config`,
   CAMERA_STATE_CHANGED : `live-face-tracker:camera-event:status:change`,
   AI_HUMAN_DETETCT_EVENT : (cameraId: string) => `live-face-tracker:camera-events:${cameraId}`, // live-face-tracker:camera-events:ent
 

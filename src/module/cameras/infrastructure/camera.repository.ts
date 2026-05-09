@@ -52,4 +52,18 @@ export default class CameraRepository implements ICameraRepository {
 
         return cameraStatus; 
     }
+
+    async update(id: string, data: Partial<Camera>) {
+        const doc = await CameraModel.findByIdAndUpdate(id, { $set: data }, { new: true }).lean();
+        if (!doc) {
+            throw new ApiError(StatusCodes.NOT_FOUND, "Camera not found");
+        }
+        // publish updated camera config to redis if needed
+        try {
+            await redis.hset(RedisEventNames.CAMERA_CONFIG(doc.code), doc as any);
+        } catch (err) {
+            // ignore redis errors
+        }
+        return doc;
+    }
 }

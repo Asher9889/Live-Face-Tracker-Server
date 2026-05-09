@@ -1,4 +1,6 @@
 import pinoHttp, { Options } from "pino-http";
+import pino from "pino";
+
 
 export default function createHttpLogger() {
     const isProd = process.env.NODE_ENV === "production";
@@ -54,3 +56,10 @@ export default function createHttpLogger() {
     // Production (pure JSON, fast)
     return pinoHttp(options);
 }
+
+export const logger = pino({
+   transport : {
+        target: "pino-pretty",
+        options: { colorize: true },
+   }
+});

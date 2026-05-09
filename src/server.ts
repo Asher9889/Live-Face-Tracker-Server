@@ -3,7 +3,7 @@ import cors from "cors";
 import compression from "compression";
 import { connectMongoDB, connectRedis } from "./db";
 import { envConfig } from "./config";
-import { globalErrorHandler, routeNotExistsHandler, createHttpLogger } from "./utils";
+import { globalErrorHandler, routeNotExistsHandler, createHttpLogger, logger } from "./utils";
 import apiRouter from "./routes";
 import http from "http";
 import { initWSSStreaming, initCameraStatusSubscriber } from "./stream";
@@ -46,7 +46,7 @@ app.use(Pinologger);
 
 initEventHandlers(); // for internal event_emitter 
 void initAttendanceStreamConsumer().catch((error) => {
-    console.error("[STREAM] attendance consumer failed to start", error);
+    logger.error({ error }, "[STREAM] attendance consumer failed to start");
 });
 initWSSStreaming(server);
 initCameraStatusSubscriber();
@@ -63,5 +63,5 @@ app.use(routeNotExistsHandler);
 app.use(globalErrorHandler);
 
 server.listen(envConfig.port, () => {
-    console.log(`Server is running on port ${envConfig.port}`);
+    logger.info(`Server is running on port ${envConfig.port}`);
 });

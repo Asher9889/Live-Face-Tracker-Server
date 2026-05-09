@@ -24,4 +24,16 @@ export default class CameraService {
     async getAllCamerasStatus(){
         return await this.repo.getAllStatus();
     }
+
+    async updateCamera(cameraId: string, payload: Partial<CreateCameraDTO>){
+        // pick allowed fields
+        const allowed: any = {};
+        const fields = [
+            'name','role','gateType','location','rtspUrl','credentials','streamConfig','enabled','roi','wsStreamId','status'
+        ];
+        for(const f of fields) {
+            if (Object.prototype.hasOwnProperty.call(payload, f)) allowed[f] = (payload as any)[f];
+        }
+        return await this.repo.update(cameraId, allowed as any);
+    }
 }

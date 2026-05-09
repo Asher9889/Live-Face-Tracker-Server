@@ -50,3 +50,8 @@ export const cameraSchema = z.object({
 
 
 export type TCameraSchema = z.infer<typeof cameraSchema>;
+
+// Partial update schema for PUT /cameras/:cameraId — disallow changing `code`
+export const cameraUpdateSchema = cameraSchema.omit({ code: true }).partial();
+
+export type TCameraUpdateSchema = z.infer<typeof cameraUpdateSchema>;

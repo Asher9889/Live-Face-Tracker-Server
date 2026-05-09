@@ -6,5 +6,6 @@ import parseDuration from "./parseDuration";
 import miliSecondsToISoDate, { todayDate } from "./miliSecondsToISoDate";
 import createHttpLogger from "./logger/pino.logger";
 import saveUnknownDebugImages from "./saveUnknownDebugImages";
+import { logger } from "./logger/pino.logger";
 
-export { createHttpLogger, todayDate, parseDuration, miliSecondsToISoDate, ApiError, ApiResponse, routeNotExistsHandler, globalErrorHandler, saveUnknownDebugImages };
+export { logger, createHttpLogger, todayDate, parseDuration, miliSecondsToISoDate, ApiError, ApiResponse, routeNotExistsHandler, globalErrorHandler, saveUnknownDebugImages };

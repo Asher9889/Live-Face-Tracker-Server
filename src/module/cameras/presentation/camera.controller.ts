@@ -11,6 +11,7 @@ export default class CameraController {
     constructor(cameraService: CameraService) {
         this.cameraService = cameraService;
         this.createCamera = this.createCamera.bind(this);
+        this.updateCamera = this.updateCamera.bind(this);
         this.getAllCameras = this.getAllCameras.bind(this);
         this.getToken = this.getToken.bind(this);
         this.getAllCamerasStatus = this.getAllCamerasStatus.bind(this);
@@ -47,6 +48,19 @@ export default class CameraController {
             return ApiResponse.success(res, "Cameras fetched successfully", cameras, StatusCodes.OK)
         } catch (error) {
             console.log("error is:", error)
+            return next(error);
+        }
+    }
+
+    async updateCamera(req: Request, res: Response, next: NextFunction){
+        try {
+            const cameraId = req.params.cameraId as string;
+            if(!cameraId) throw new Error("cameraId is required");
+
+            const payload = req.body;
+            const updated = await this.cameraService.updateCamera(cameraId, payload);
+            return ApiResponse.success(res, "Camera updated successfully", updated, StatusCodes.OK);
+        } catch (error) {
             return next(error);
         }
     }

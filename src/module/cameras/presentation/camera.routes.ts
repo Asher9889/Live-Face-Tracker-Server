@@ -3,7 +3,7 @@ import CameraController from "./camera.controller";
 import CameraService from "../application/camera.service";
 import CameraRepository from "../infrastructure/camera.repository";
 import { isAuthenticated, validate } from "../../../middlewares";
-import { cameraSchema } from "../infrastructure/camera.schema";
+import { cameraSchema, cameraUpdateSchema } from "../infrastructure/camera.schema";
 import cameraController from "../../../stream";
 import cameraUrl from "../../../config/camera";
 import { ApiError } from "../../../utils";
@@ -14,6 +14,7 @@ const router = express.Router();
 const controller = new CameraController(new CameraService(new CameraRepository));
 
 router.post("/", isAuthenticated, validate(cameraSchema), controller.createCamera);
+router.put("/:cameraId", isAuthenticated, validate(cameraUpdateSchema), controller.updateCamera);
 router.get("/", controller.getAllCameras);
 router.get("/:cameraId/token", isAuthenticated, controller.getToken);
 router.post("/:cameraId/start", isAuthenticated, async (req, res, next) => {
