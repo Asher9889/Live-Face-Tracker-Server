@@ -115,6 +115,8 @@ export default class PresenceService {
                             }, { session: session }
                         );
 
+                        attendanceService.updateSessionLastSeen(employeeId, miliSecondsToISoDate(eventTs), eventTs, session);
+
                         await this.logService.insertLog({
                             employeeId,
                             eventType: "EXIT_CANCELLED",
@@ -158,6 +160,8 @@ export default class PresenceService {
                         },
                     }
                 );
+
+                await attendanceService.updateSessionLastSeen(employeeId, miliSecondsToISoDate(eventTs), eventTs);
 
                 await this.logService.insertLog({
                     employeeId,

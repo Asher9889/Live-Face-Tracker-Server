@@ -1014,14 +1014,19 @@ export default class AttendanceService {
         }
     }
 
-    async updateSessionLastSeen(employeeId: string, date: string, seenAt: number) {
+    async updateSessionLastSeen(employeeId: string, date: string, seenAt: number, session?: mongoose.ClientSession) {
         try {
             console.log(`Updating last seen for employee ${employeeId} on ${date} to ${seenAt}`);
-            const updated = await AttendanceModel.findOneAndUpdate(
+            const query = AttendanceModel.findOneAndUpdate(
                 { employeeId, date, exitAt: { $exists: false } },
                 { $max: { lastSeenAt: seenAt } }, // only update if seenAt is greater than existing lastSeenAt,
                 { sort: { entryAt: -1 }, new: true } // 👈 ensures latest session, return updated
-            ).lean();
+            ).lean().session(session ?? null);
+
+            if(session){
+                query.session(session);
+            }
+            const updated = await query;
             console.log(`Updated attendance session: ${updated ? updated._id.toString() : "none"}`);
             return updated;
         } catch (error) {
