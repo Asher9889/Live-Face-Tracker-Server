@@ -586,12 +586,18 @@ export default class AttendanceService {
         const firstEntry = sessions[0]?.entryAt ?? null;
         const lastClosedExit = [...sessions].reverse().find((session: any) => session.exitAt)?.exitAt ?? null;
 
-        const now = Date.now();
+
+        let now = Date.now();
+
         let totalDurationMs = 0;
         for (const session of sessions) {
-            if (typeof session.durationMs === "number" && session.exitAt) {
+            // if durationMs is present, means session closed properly with exitAt and durationMs
+            if (typeof session.durationMs === "number" && session.exitAt) { 
                 totalDurationMs += session.durationMs;
-            } else {
+            } else if (session.isExitMissing && session.exitSource === "SYSTEM_RECOVERY") {
+                totalDurationMs += Math.max(0, Number(session.lastSeenAt) - Number(session.entryAt));
+            }
+            else {
                 totalDurationMs += Math.max(0, now - Number(session.entryAt));
             }
         }

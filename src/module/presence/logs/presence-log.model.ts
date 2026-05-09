@@ -33,7 +33,7 @@ const PresenceLogSchema = new Schema<IPresenceLog>(
       required: true,
     },
 
-    fromState: { type: String, enum: ["IN", "OUT"] },
+    fromState: { type: String, enum: ["IN", "OUT", "EXIT_PENDING", "PENDING_EXIT"] },
     toState: { type: String, enum: ["IN", "OUT"] },
 
     cameraCode: { type: String },
