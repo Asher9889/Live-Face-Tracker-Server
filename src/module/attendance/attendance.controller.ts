@@ -68,7 +68,7 @@ export default class AttendanceController {
         try {
             const query = req.validatedQuery;
             // allow empty query and default date to today in service
-            const data = await (attendanceService as any).getCurrentState(query ?? {} as any);
+            const data = await attendanceService.getCurrentState(query ?? {} as any);
             return ApiResponse.success(res, "Current present employees fetched successfully", data, StatusCodes.OK);
         } catch (error) {
             throw error;

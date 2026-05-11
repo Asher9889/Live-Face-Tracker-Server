@@ -186,7 +186,22 @@ export class EmployeeService {
       name: data.name,
       role: data.role,
       department: data.department,
-      avatar: ( data.faceImages?.[0]) ?  "https://minio.mssplonline.in/" + "facevision/" + data.faceImages[0] : null,
+      avatar: (data.faceImages?.[0]) ? "https://minio.mssplonline.in/" + "facevision/" + data.faceImages[0] : null,
+    }
+  }
+
+  async searchEmployees(name: string) {
+    try {
+      const results = await EmployeeModel.find({ name: { $regex: name, $options: "i" } }, { name: 1, department: 1, role: 1, _id: 1 }).lean();
+      const employees = results.map(emp => ({
+        id: emp._id.toString(),
+        name: emp.name,
+        department: emp.department,
+        role: emp.role
+      }));
+      return employees;
+    } catch (error) {
+       throw error;
     }
   }
 }

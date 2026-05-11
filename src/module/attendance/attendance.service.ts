@@ -335,7 +335,7 @@ export default class AttendanceService {
         return this.buildAttendanceRangeResponse(query);
     }
 
-    async getCurrentState(query: any) {
+    getCurrentState = async (query: any) => {
         const date = query?.date ?? todayDate();
         const limit = typeof query?.limit === "number" ? query.limit : 100;
         const offset = typeof query?.offset === "number" ? query.offset : 0;

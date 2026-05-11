@@ -86,4 +86,17 @@ export default class EmployeeController {
             return next(error);
         }
     }
+
+    searchEmployees = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const name = req.query.name as string;
+            if(!name) {
+                throw new ApiError(StatusCodes.BAD_REQUEST, "Query parameter 'name' is required", [{ field: "name", message: "Name inside name is required" }]);
+            }
+            const results = await employeeService.searchEmployees(name);
+            return ApiResponse.success(res, "Search completed successfully", results, StatusCodes.OK);
+        } catch (error) {
+            return next(error);
+        }
+    }
 }

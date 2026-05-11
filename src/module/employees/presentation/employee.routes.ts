@@ -11,6 +11,7 @@ const controller = new EmployeeController();
 // Create employee
 router.post("/", uploadFaces, multerErrorHandler, validate(createEmployeeSchema), controller.createEmployee);
 router.get("/", validateQuery(employeeQuerySchema), controller.findAllEmployees);
+router.get("/search", controller.searchEmployees);
 
 // unknown to known
 router.post("/promote", uploadFace, multerSingleFaceErrorHandler, validate(createEmployeeFromUnknownSchema), controller.createEmployeeFromUnknown)

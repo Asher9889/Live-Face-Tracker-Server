@@ -91,7 +91,7 @@ export const attendanceCurrentStateQuerySchema = z.object({
     limit: z.coerce.number().int().min(1).max(500).default(100),
     offset: z.coerce.number().int().min(0).default(0),
     sortBy: z.enum(["firstEntryAt", "lastSeenAt", "employeeName", "department"]).optional().default("lastSeenAt"),
-    sortOrder: z.enum(["asc", "desc"]).optional().default("desc"),
+    sortOrder: z.enum(["asc", "desc"]).optional().default("asc"),
     timezone: timezoneSchema,
 });
 

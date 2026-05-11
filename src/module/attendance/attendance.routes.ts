@@ -17,7 +17,7 @@ const router = express.Router();
 
 router.get("/today/:employeeId", validateQuery(attendanceEmployeeSessionQuerySchema), attendanceController.getEmployeeTodayAttendanceSession);
 router.get("/employees/:employeeId/session", validateQuery(attendanceEmployeeSessionQuerySchema), attendanceController.getEmployeeTodayAttendanceSession);
-router.get("/current-state", validateQuery(attendanceCurrentStateQuerySchema), (attendanceController as any).getCurrentState);
+router.get("/current-state", validateQuery(attendanceCurrentStateQuerySchema), attendanceController.getCurrentState);
 router.get("/date", validateQuery(attendanceDateQuerySchema), attendanceController.getAttendanceByDate);
 router.get("/range", validateQuery(attendanceRangeQuerySchema), attendanceController.getAttendanceByRange);
 router.get("/events", validateQuery(attendanceEventsQuerySchema), attendanceController.getAllAttendenceEvents);

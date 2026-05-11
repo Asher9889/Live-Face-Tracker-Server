@@ -6,7 +6,7 @@ const employeeSchema = new mongoose.Schema({
     },
     name: {
         type: String,
-        required: true
+        required: true,
     },
     email: {
         type: String,
@@ -36,6 +36,8 @@ const employeeSchema = new mongoose.Schema({
         default: null
     },
 }, { versionKey: false });
+
+employeeSchema.index({ name: 1 });
 
 employeeSchema.pre("save", function () {
     if (!this.id) {
