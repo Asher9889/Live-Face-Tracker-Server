@@ -440,7 +440,26 @@ export default class AttendanceService {
         const agg = await AttendanceModel.aggregate([
             { $match: match },
             { $sort: { entryAt: 1 } },
-            { $group: { _id: "$employeeId", sessions: { $push: "$ROOT" }, firstEntry: { $first: "$entryAt" }, lastExit: { $last: "$exitAt" }, lastSeenAt: { $last: "$lastSeenAt" }, totalDurationMs: { $sum: { $ifNull: ["$durationMs", 0] } } } },
+            {
+                $group: {
+                    _id: "$employeeId",
+                    // Capture all session details for robust duration calculation
+                    sessions: {
+                        $push: {
+                            entryAt: "$entryAt",
+                            exitAt: "$exitAt",
+                            durationMs: "$durationMs",
+                            lastSeenAt: "$lastSeenAt",
+                            entryCameraCode: "$entryCameraCode",
+                            exitCameraCode: "$exitCameraCode",
+                        },
+                    },
+                    firstEntry: { $first: "$entryAt" },
+                    lastExit: { $last: "$exitAt" },
+                    lastSeenAt: { $last: "$lastSeenAt" },
+                    totalDurationMs: { $sum: { $ifNull: ["$durationMs", 0] } },
+                }
+            },
         ]).allowDiskUse(true).exec();
 
         const normalizeEmployeeKey = (value: any): string | null => {
@@ -475,9 +494,46 @@ export default class AttendanceService {
             const firstEntry = a.firstEntry ?? null;
             const lastExit = a.lastExit ?? null;
             const lastSeenAt = a.lastSeenAt;
-            const workMinutes = Math.round((a.totalDurationMs ?? 0) / 60000);
-            const workHours = workMinutes > 0 ? `${Math.floor(workMinutes / 60)}h ${workMinutes % 60}m` : null;
+
+            // Robust work hours calculation
+            // Handles both closed sessions (with exitAt + durationMs) and open sessions
+            const calculateWorkHours = (sessions: any[]): string | null => {
+                if (!sessions || sessions.length === 0) return null;
+
+                let totalMs = 0;
+
+                // Step 1: Sum all closed sessions (those with durationMs already calculated)
+                const closedSessions = sessions.filter((s: any) => s.durationMs);
+                totalMs += closedSessions.reduce((sum: number, s: any) => sum + (s.durationMs || 0), 0);
+
+                // Step 2: For open sessions (exitAt missing), calculate from entry to lastSeenAt
+                // This captures time from entry until last detection
+                const openSessions = sessions.filter((s: any) => !s.exitAt);
+                const now = DateTime.now().setZone(timezone).toMillis();
+                openSessions.forEach((s: any) => {
+                    if (s.entryAt) {
+                        const seenAt = s.lastSeenAt || firstEntry;
+                        const sessionDurationMs = Math.max(0, now - s.entryAt);
+                        totalMs += sessionDurationMs;
+                    }
+                });
+
+                // Step 3: Convert to human-readable format "Xh Ym"
+                if (totalMs === 0) return null;
+
+                const totalMinutes = Math.round(totalMs / 60000);
+                const hours = Math.floor(totalMinutes / 60);
+                const minutes = totalMinutes % 60;
+
+                return `${hours}h ${minutes}m`;
+            };
+
+            const workHours = calculateWorkHours(a.sessions);
             const isLate = firstEntry ? this.isLateEntry(Number(firstEntry), timezone) : false;
+
+            // Determine current session status: "in" if any open session, "out" if all closed
+            const hasOpenSession = a.sessions.some((s: any) => !s.exitAt);
+            const currentStatus = hasOpenSession ? "In" : "Out";
 
             return {
                 id: `${mode}_${fromDate}_${employeeKey ?? "unknown"}`,
@@ -490,6 +546,7 @@ export default class AttendanceService {
                 lastSeenAt: lastSeenAt ? this.toIsoWithZone(Number(lastSeenAt), timezone) : null,
                 workHours,
                 status: firstEntry ? "Present" : "Absent",
+                currentStatus, // "in" = open session, "out" = all sessions closed
                 lateStatus: Boolean(isLate),
                 missingExit: a.sessions.some((s: any) => !s.exitAt),
             };

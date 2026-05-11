@@ -74,8 +74,10 @@ type ReportRowDaily = {
   department?: string | null;
   entryTime?: string | null; // ISO or formatted (frontend expects string)
   exitTime?: string | null;  // ISO or formatted
+  lastSeenAt?: string | null; // ISO timestamp of last detection
   workHours?: string | null; // formatted e.g. "8h 12m"
   status: "Present" | "Absent" | "Late" | "Half Day";
+  currentStatus: "In" | "Out"; // "in" = open session (employee currently present), "out" = all sessions closed
   lateStatus: boolean;
   missingExit: boolean;
 }
@@ -108,7 +110,7 @@ type ReportsRowsData<T = ReportRowDaily | ReportRowMonthly> = {
 
 Example (daily):
 ```json
-{ "status": "success", "statusCode": 200, "data": { "mode": "daily", "rows": [ { "id": "daily_2026-05-11_emp_123", "employeeId": "emp_123", "name": "Alice Smith", "avatar": null, "department": "Engineering", "entryTime": "2026-05-11T09:12:00+05:30", "exitTime": "2026-05-11T18:05:00+05:30", "workHours": "8h 53m", "status": "Present", "lateStatus": false, "missingExit": false } ], "pagination": { "page": 1, "pageSize": 25, "total": 125, "totalPages": 5 } } }
+{ "status": "success", "statusCode": 200, "data": { "mode": "daily", "rows": [ { "id": "daily_2026-05-11_emp_123", "employeeId": "emp_123", "name": "Alice Smith", "avatar": null, "department": "Engineering", "entryTime": "2026-05-11T09:12:00+05:30", "exitTime": "2026-05-11T18:05:00+05:30", "lastSeenAt": "2026-05-11T18:05:00+05:30", "workHours": "8h 53m", "status": "Present", "currentStatus": "out", "lateStatus": false, "missingExit": false } ], "pagination": { "page": 1, "pageSize": 25, "total": 125, "totalPages": 5 } } }
 ```
 
 Notes:
