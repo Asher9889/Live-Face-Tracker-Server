@@ -147,11 +147,15 @@ export default class AttendanceService {
     async getEmployeeMonthlySummary(employeeId: string, query: AttendanceEmployeeSummaryQueryDTO) {
         const { month, timezone } = query;
         const { monthStartDate, monthEndDate } = this.getMonthBounds(month, timezone);
-        const sessions = await this.getAttendanceSessionsInRange(employeeId, monthStartDate, monthEndDate);
+        const today = todayDate();
+        const currentMonth = DateTime.now().setZone(timezone).toFormat("yyyy-MM");
+        // Use explicit endDate if provided, otherwise cap to today if viewing current month
+        const effectiveEndDate = (query as any).endDate || (month === currentMonth ? today : monthEndDate);
+        const sessions = await this.getAttendanceSessionsInRange(employeeId, monthStartDate, effectiveEndDate);
         const groupedByDay = this.groupSessionsByDate(sessions);
 
         const presentDays = groupedByDay.size;
-        const workingDays = this.countWorkingDays(monthStartDate, monthEndDate, timezone);
+        const workingDays = this.countWorkingDays(monthStartDate, effectiveEndDate, timezone);
 
         let totalDurationMinutes = 0;
         let lateArrivals = 0;
@@ -340,19 +344,22 @@ export default class AttendanceService {
     async getReportsSummary(query: any) {
         const mode = query.mode;
         const timezone = query?.timezone ?? "Asia/Kolkata";
+        const today = todayDate();
 
         let fromDate: string;
         let toDate: string;
 
         if (mode === "daily") {
-            const date = query.date ?? todayDate();
+            const date = query.date ?? today;
             fromDate = date;
             toDate = date;
         } else if (mode === "monthly") {
             const month = query.month ?? DateTime.now().setZone(timezone).toFormat("yyyy-MM");
             const { monthStartDate, monthEndDate } = this.getMonthBounds(month, timezone);
+            const currentMonth = DateTime.now().setZone(timezone).toFormat("yyyy-MM");
             fromDate = monthStartDate;
-            toDate = monthEndDate;
+            // If viewing current month, cap toDate to today (don't include future dates)
+            toDate = month === currentMonth ? today : monthEndDate;
         } else {
             fromDate = query.startDate;
             toDate = query.endDate;
@@ -407,18 +414,21 @@ export default class AttendanceService {
     async getReportsRows(query: any) {
         const mode = query.mode;
         const timezone = query?.timezone ?? "Asia/Kolkata";
+        const today = todayDate();
         let fromDate: string;
         let toDate: string;
 
         if (mode === "daily") {
-            const date = query.date ?? todayDate();
+            const date = query.date ?? today;
             fromDate = date;
             toDate = date;
         } else if (mode === "monthly") {
             const month = query.month ?? DateTime.now().setZone(timezone).toFormat("yyyy-MM");
             const { monthStartDate, monthEndDate } = this.getMonthBounds(month, timezone);
+            const currentMonth = DateTime.now().setZone(timezone).toFormat("yyyy-MM");
             fromDate = monthStartDate;
-            toDate = monthEndDate;
+            // If viewing current month, cap toDate to today (don't include future dates)
+            toDate = month === currentMonth ? today : monthEndDate;
         } else {
             fromDate = query.startDate;
             toDate = query.endDate;
@@ -574,15 +584,19 @@ export default class AttendanceService {
         const timezone = query?.timezone ?? "Asia/Kolkata";
         const date = query?.date ?? todayDate();
         const month = query?.month ?? DateTime.fromISO(date, { zone: timezone }).toFormat("yyyy-MM");
+        const today = todayDate();
+        const currentMonth = DateTime.now().setZone(timezone).toFormat("yyyy-MM");
+        // Only pass endDate cap if viewing current month
+        const monthlyQuery = month === currentMonth ? { month, timezone, endDate: today } : { month, timezone };
 
         const timeline = await this.getEmployeeTimelineByDate(employeeId, { date, timezone });
-        const monthly = await this.getEmployeeMonthlySummary(employeeId, { month, timezone });
+        const monthly = await this.getEmployeeMonthlySummary(employeeId, monthlyQuery as any);
 
         const events = (timeline.events || []).map((e: any) => {
             let type = e.type ;
             return {
                 id: e.eventId ?? `${e.type}_${e.timestamp}`,
-                type: e.type === "ENTRY" ? "ENTRY" : "EXIT",
+                type: type === "ENTRY" ? "ENTRY" : "EXIT",
                 eventName: e.eventName,
                 timestamp: e.timestamp,
                 cameraSource: e.cameraName ?? null,
