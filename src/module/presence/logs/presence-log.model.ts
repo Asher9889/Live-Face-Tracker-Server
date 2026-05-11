@@ -55,6 +55,6 @@ const PresenceLogSchema = new Schema<IPresenceLog>(
   { versionKey: false, timestamps: true }
 );
 
-PresenceLogSchema.index({ employeeId: 1, occurredAt: 1 });
+PresenceLogSchema.index({ employeeId: 1, eventType: 1, occurredAt: 1 });
 
 export const PresenceLogModel = mongoose.model("employees_presence_logs", PresenceLogSchema, "employees_presence_logs");

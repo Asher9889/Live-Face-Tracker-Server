@@ -146,7 +146,7 @@ export default class AttendanceController {
             const { employeeId } = req.params;
             if (!employeeId) throw new ApiError(StatusCodes.BAD_REQUEST, "Employee ID is required", [{ field: "employeeId", message: "Employee ID is required" }]);
             const query = req.validatedQuery as any;
-            const data = await (attendanceService as any).getReportEmployeeTimeline(employeeId, query ?? {});
+            const data = await attendanceService.getReportEmployeeTimeline(employeeId, query ?? {});
             return ApiResponse.success(res, "Employee report timeline fetched successfully", data, StatusCodes.OK);
         } catch (error) {
             throw error;

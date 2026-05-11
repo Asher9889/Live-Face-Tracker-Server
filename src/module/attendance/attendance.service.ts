@@ -106,20 +106,22 @@ export default class AttendanceService {
 
         const logs = await PresenceLogModel.find({
             employeeId,
+            eventType: { $in: ["ENTRY_DETECTED", "FACE_DETECTED", "EXIT_DETECTED", "PENDING_EXIT", "EXIT_PENDING", "EXIT_CANCELLED", "AUTO_EXIT_TIMEOUT", "SYSTEM_RECOVERY", "MANUAL_CORRECTION"] },
             occurredAt: { $gte: dayStartMs, $lte: dayEndMs },
-            eventType: { $in: ["ENTRY_DETECTED", "EXIT_DETECTED", "AUTO_EXIT_TIMEOUT", "SYSTEM_RECOVERY", "MANUAL_CORRECTION"] },
-        }).sort({ occurredAt: 1 }).lean();
+        }).sort({ occurredAt: 1 }).hint({ employeeId: 1, eventType: 1, occurredAt: 1 }).lean();
 
         const cameraMap = await this.getCameraMap(logs.map((log: any) => log.cameraCode).filter(Boolean));
 
-        const events = logs.map((log: any, index: number) => {
+        const events = logs.map((log, index) => {
             const camera = cameraMap.get(log.cameraCode ?? "");
-            const type: TimelineEventType = log.eventType === "ENTRY_DETECTED" ? "ENTRY" : "EXIT";
+            const type: TimelineEventType = log.toState === "IN" ? "ENTRY" : "EXIT";
+            const eventName = log.eventType
             const timestamp = this.toIsoWithZone(log.occurredAt, timezone);
 
             return {
                 eventId: log._id?.toString?.() ?? `evt_${index + 1}`,
                 timestamp,
+                eventName: log.eventType,
                 type,
                 cameraId: camera?.id ?? null,
                 cameraCode: log.cameraCode ?? null,
@@ -127,7 +129,7 @@ export default class AttendanceService {
                 confidence: typeof log.confidence === "number" ? log.confidence : null,
                 status: "VERIFIED",
                 source: this.mapLogSource(log.source),
-                note: log.note ?? this.mapTimelineNote(log.eventType),
+                note: log.note ?? this.mapTimelineNote(eventName),
             };
         });
 
@@ -565,7 +567,7 @@ export default class AttendanceService {
         };
     }
 
-    async getReportEmployeeTimeline(employeeId: string, query: any) {
+    getReportEmployeeTimeline = async (employeeId: string, query: any) => {
         const employee = await this.resolveEmployee(employeeId);
         if (!employee) throw new ApiError(StatusCodes.NOT_FOUND, "Employee not found", [{ field: "employeeId", message: "Employee not found" }]);
 
@@ -576,21 +578,25 @@ export default class AttendanceService {
         const timeline = await this.getEmployeeTimelineByDate(employeeId, { date, timezone });
         const monthly = await this.getEmployeeMonthlySummary(employeeId, { month, timezone });
 
-        const events = (timeline.events || []).map((e: any) => ({
-            id: e.eventId ?? `${e.type}_${e.timestamp}`,
-            type: e.type === "ENTRY" ? "ENTRY_DETECTED" : "EXIT_CONFIRMED",
-            timestamp: e.timestamp,
-            cameraSource: e.cameraName ?? null,
-            confidence: e.confidence ?? null,
-            statusBadge: e.status === "VERIFIED" ? "success" : e.status === "UNKNOWN" ? "warning" : "default",
-        }));
+        const events = (timeline.events || []).map((e: any) => {
+            let type = e.type ;
+            return {
+                id: e.eventId ?? `${e.type}_${e.timestamp}`,
+                type: e.type === "ENTRY" ? "ENTRY" : "EXIT",
+                eventName: e.eventName,
+                timestamp: e.timestamp,
+                cameraSource: e.cameraName ?? null,
+                confidence: e.confidence ?? null,
+                statusBadge: e.status === "VERIFIED" ? "success" : e.status === "UNKNOWN" ? "warning" : "default",
+            }
+        });
 
         return {
             employee: {
                 id: employee._id?.toString?.() ?? employee.id,
                 employeeId: employee.id ?? employee._id?.toString?.(),
                 name: employee.name,
-                avatar: employee.faceImages?.[0] ?? null,
+                avatar: "https://minio.mssplonline.in" + "/facevision/" + (employee.faceImages?.[0] ?? null),
                 department: employee.department ?? null,
                 role: employee.role ?? null,
             },
@@ -1717,14 +1723,17 @@ export default class AttendanceService {
 
     private mapTimelineNote(eventType: string) {
         if (eventType === "ENTRY_DETECTED") return "Face Verified";
+        if (eventType === "FACE_DETECTED") return "Face Detected";
+        if (eventType === "EXIT_PENDING" || eventType === "PENDING_EXIT") return "Exit Pending";
         if (eventType === "EXIT_DETECTED") return "Exit Verified";
+        if (eventType === "EXIT_CANCELED") return "Exit Canceled";
         if (eventType === "AUTO_EXIT_TIMEOUT") return "Auto Exit Timeout";
         if (eventType === "SYSTEM_RECOVERY") return "System Recovery";
         if (eventType === "MANUAL_CORRECTION") return "Manual Correction";
         return "";
     }
 
-    private computeTimelineSummary(events: Array<{ timestamp: string; type: TimelineEventType }>) {
+    private computeTimelineSummary(events: Array<{ timestamp: string; type: string }>) { // TimelineEventType
         const entries = events.filter((event) => event.type === "ENTRY");
         const exits = events.filter((event) => event.type === "EXIT");
 
