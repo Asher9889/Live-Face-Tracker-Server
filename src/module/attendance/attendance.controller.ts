@@ -14,6 +14,8 @@ import {
     AttendanceCurrentStateQueryDTO,
     AttendanceEmployeeSessionQueryDTO,
     AttendanceReportExportBodyDTO,
+    ReportsSummaryQueryDTO,
+    ReportsRowsQueryDTO,
 } from "./attendance.types";
 
 
@@ -115,6 +117,40 @@ export default class AttendanceController {
         }
 
         return ApiResponse.success(res, "Employee attendance export queued", result.data, StatusCodes.ACCEPTED);
+    }
+
+    getReportsSummary = async (req: CustomRequest<ReportsSummaryQueryDTO>, res: Response): Promise<Response> => {
+        try {
+            const query = req.validatedQuery;
+            if (!query) throw new ApiError(StatusCodes.BAD_REQUEST, "Query params are required", [{ field: "query", message: "Query params are required" }]);
+            const data = await (attendanceService as any).getReportsSummary(query);
+            return ApiResponse.success(res, "Reports summary fetched successfully", data, StatusCodes.OK);
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    getReportsRows = async (req: CustomRequest<ReportsRowsQueryDTO>, res: Response): Promise<Response> => {
+        try {
+            const query = req.validatedQuery;
+            if (!query) throw new ApiError(StatusCodes.BAD_REQUEST, "Query params are required", [{ field: "query", message: "Query params are required" }]);
+            const data = await (attendanceService as any).getReportsRows(query);
+            return ApiResponse.success(res, "Reports rows fetched successfully", data, StatusCodes.OK);
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    getReportsEmployeeTimeline = async (req: CustomRequest<AttendanceEmployeeTimelineQueryDTO>, res: Response): Promise<Response> => {
+        try {
+            const { employeeId } = req.params;
+            if (!employeeId) throw new ApiError(StatusCodes.BAD_REQUEST, "Employee ID is required", [{ field: "employeeId", message: "Employee ID is required" }]);
+            const query = req.validatedQuery as any;
+            const data = await (attendanceService as any).getReportEmployeeTimeline(employeeId, query ?? {});
+            return ApiResponse.success(res, "Employee report timeline fetched successfully", data, StatusCodes.OK);
+        } catch (error) {
+            throw error;
+        }
     }
 
     getAttendanceExportJob = async (req: CustomRequest, res: Response): Promise<Response> => {

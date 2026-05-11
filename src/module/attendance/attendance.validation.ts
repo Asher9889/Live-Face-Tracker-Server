@@ -95,6 +95,68 @@ export const attendanceCurrentStateQuerySchema = z.object({
     timezone: timezoneSchema,
 });
 
+// Reports query schemas
+const modeEnum = z.enum(["daily", "monthly", "custom"]);
+
+const reportsBaseFilters = z.object({
+    mode: modeEnum,
+    date: dateSchema.optional(),
+    month: monthSchema.optional(),
+    startDate: dateSchema.optional(),
+    endDate: dateSchema.optional(),
+    employeeId: z.string().trim().min(1).optional().transform((v) => (v === "" ? undefined : v)),
+    employeeName: z.string().trim().optional().transform((v) => (v === "" ? undefined : v)),
+    department: z.string().trim().optional().transform((v) => (v === "" || v === "all" ? undefined : v)),
+    status: z.string().optional(),
+    lateOnly: z.coerce.boolean().optional().default(false),
+    missingExitOnly: z.coerce.boolean().optional().default(false),
+    timezone: timezoneSchema,
+});
+
+export const reportsSummaryQuerySchema = reportsBaseFilters.extend({});
+
+export const reportsRowsQuerySchema = reportsBaseFilters.extend({
+    page: z.coerce.number().int().min(1).default(1),
+    pageSize: z.coerce.number().int().min(1).max(200).default(25),
+    sortBy: z.string().optional(),
+    sortOrder: z.enum(["asc", "desc"]).optional().default("asc"),
+});
+
+export const reportsExportBodySchema = z.object({
+    mode: modeEnum,
+    date: dateSchema.optional(),
+    month: monthSchema.optional(),
+    startDate: dateSchema.optional(),
+    endDate: dateSchema.optional(),
+    scope: z.enum(["ALL_ROWS", "SELECTED_ROWS", "SELECTED_EMPLOYEES"]).default("ALL_ROWS"),
+    rowIds: z.array(z.string()).optional(),
+    employeeIds: z.array(z.string()).optional(),
+    filters: z.object({
+        employeeId: z.string().optional(),
+        employeeName: z.string().optional(),
+        department: z.string().optional(),
+        status: z.string().optional(),
+        lateOnly: z.coerce.boolean().optional(),
+        missingExitOnly: z.coerce.boolean().optional(),
+    }).optional(),
+    format: z.enum(["csv", "xlsx"]).default("csv"),
+    timezone: timezoneSchema,
+    registeredOnly: z.coerce.boolean().optional().default(true),
+}).superRefine((value, ctx) => {
+    if (value.mode === "daily" && !value.date) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["date"], message: "date is required for daily mode" });
+    }
+    if (value.mode === "monthly" && !value.month) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["month"], message: "month is required for monthly mode" });
+    }
+    if (value.mode === "custom" && (!value.startDate || !value.endDate)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["startDate", "endDate"], message: "startDate and endDate are required for custom mode" });
+    }
+    if (value.startDate && value.endDate && value.startDate > value.endDate) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["endDate"], message: "endDate must be greater than or equal to startDate" });
+    }
+});
+
 export const attendanceEmployeeSessionQuerySchema = z.object({
     date: dateSchema.optional(),
     timezone: timezoneSchema,

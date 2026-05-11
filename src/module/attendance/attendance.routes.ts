@@ -7,6 +7,8 @@ import {
 	attendanceEmployeeExportQuerySchema,
 	attendanceEmployeeSummaryQuerySchema,
 	attendanceEmployeeTimelineQuerySchema,
+	reportsSummaryQuerySchema,
+	reportsRowsQuerySchema,
 	attendanceEventsQuerySchema,
 	attendanceRangeQuerySchema,
 	attendanceCurrentStateQuerySchema,
@@ -22,7 +24,10 @@ router.get("/date", validateQuery(attendanceDateQuerySchema), attendanceControll
 router.get("/range", validateQuery(attendanceRangeQuerySchema), attendanceController.getAttendanceByRange);
 router.get("/events", validateQuery(attendanceEventsQuerySchema), attendanceController.getAllAttendenceEvents);
 router.get("/employees/:employeeId/timeline", validateQuery(attendanceEmployeeTimelineQuerySchema), attendanceController.getEmployeeTimelineByDate);
+router.get("/reports/employees/:employeeId/timeline", validateQuery(attendanceEmployeeTimelineQuerySchema), attendanceController.getReportsEmployeeTimeline);
 router.get("/employees/:employeeId/summary", validateQuery(attendanceEmployeeSummaryQuerySchema), attendanceController.getEmployeeMonthlySummary);
+router.get("/reports/summary", validateQuery(reportsSummaryQuerySchema), attendanceController.getReportsSummary);
+router.get("/reports/rows", validateQuery(reportsRowsQuerySchema), attendanceController.getReportsRows);
 router.get("/employees/:employeeId/calendar", validateQuery(attendanceCalendarQuerySchema), attendanceController.getEmployeeCalendarByMonth);
 router.get("/employees/:employeeId/export", validateQuery(attendanceEmployeeExportQuerySchema), attendanceController.exportEmployeeHistory);
 router.get("/export-jobs/:jobId", attendanceController.getAttendanceExportJob);

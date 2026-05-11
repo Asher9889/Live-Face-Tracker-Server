@@ -1,6 +1,8 @@
 import z from "zod";
 import {
   attendanceDateQuerySchema,
+  reportsSummaryQuerySchema,
+  reportsRowsQuerySchema,
   attendanceCalendarQuerySchema,
   attendanceEmployeeExportQuerySchema,
   attendanceEmployeeSummaryQuerySchema,
@@ -31,6 +33,8 @@ export type AttendanceEmployeeExportQueryDTO = z.infer<typeof attendanceEmployee
 export type AttendanceCurrentStateQueryDTO = z.infer<typeof attendanceCurrentStateQuerySchema>;
 export type AttendanceReportExportBodyDTO = z.infer<typeof attendanceReportExportBodySchema>;
 export type AttendanceEmployeeSessionQueryDTO = z.infer<typeof attendanceEmployeeSessionQuerySchema>;
+export type ReportsSummaryQueryDTO = z.infer<typeof reportsSummaryQuerySchema>;
+export type ReportsRowsQueryDTO = z.infer<typeof reportsRowsQuerySchema>;
 
 export type AttendenceFilterDTO = {
     lastChangedAt?: {

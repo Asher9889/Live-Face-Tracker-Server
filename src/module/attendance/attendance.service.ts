@@ -335,6 +335,217 @@ export default class AttendanceService {
         return this.buildAttendanceRangeResponse(query);
     }
 
+    async getReportsSummary(query: any) {
+        const mode = query.mode;
+        const timezone = query?.timezone ?? "Asia/Kolkata";
+
+        let fromDate: string;
+        let toDate: string;
+
+        if (mode === "daily") {
+            const date = query.date ?? todayDate();
+            fromDate = date;
+            toDate = date;
+        } else if (mode === "monthly") {
+            const month = query.month ?? DateTime.now().setZone(timezone).toFormat("yyyy-MM");
+            const { monthStartDate, monthEndDate } = this.getMonthBounds(month, timezone);
+            fromDate = monthStartDate;
+            toDate = monthEndDate;
+        } else {
+            fromDate = query.startDate;
+            toDate = query.endDate;
+        }
+
+        const match: any = { date: { $gte: fromDate, $lte: toDate } };
+        if (query.employeeId) Object.assign(match, this.getEmployeeIdQuery(query.employeeId));
+
+        if (query.department) {
+            const deptEmployees = await EmployeeModel.find({ department: query.department }, { id: 1, _id: 1 }).lean();
+            const ids = deptEmployees.map((e: any) => e.id).filter(Boolean);
+            const objIds = deptEmployees.map((e: any) => e._id?.toString?.()).filter(Boolean);
+            const combined = [...ids, ...objIds];
+            if (combined.length === 0) {
+                return { present: 0, absent: 0, late: 0, avgHours: "0h 0m", missingExit: 0, overtime: 0, totalEmployees: 0 };
+            }
+            match.$or = [{ employeeId: { $in: combined } }];
+        }
+
+        const agg = await AttendanceModel.aggregate([
+            { $match: match },
+            { $group: { _id: "$employeeId", firstEntry: { $min: "$entryAt" }, totalDurationMs: { $sum: { $ifNull: ["$durationMs", 0] } }, missingExitCount: { $sum: { $cond: [{ $or: [{ $eq: ["$exitAt", null] }, { $eq: ["$isExitMissing", true] }] }, 1, 0] } } } },
+        ]).allowDiskUse(true).exec();
+
+        const present = agg.length;
+        let totalEmployees = 0;
+        if (query.employeeId) {
+            totalEmployees = 1;
+        } else if (query.department) {
+            totalEmployees = await EmployeeModel.countDocuments({ department: query.department });
+        } else {
+            totalEmployees = await EmployeeModel.countDocuments();
+        }
+
+        const late = agg.filter((r: any) => r.firstEntry && this.isLateEntry(Number(r.firstEntry), timezone)).length;
+        const totalDurationMs = agg.reduce((s: number, r: any) => s + Number(r.totalDurationMs ?? 0), 0);
+        const avgMinutes = present > 0 ? Math.round(totalDurationMs / present / 60000) : 0;
+        const avgHours = `${Math.floor(avgMinutes / 60)}h ${avgMinutes % 60}m`;
+        const missingExit = agg.reduce((s: number, r: any) => s + Number(r.missingExitCount ?? 0), 0);
+
+        return {
+            present,
+            absent: Math.max(0, totalEmployees - present),
+            late,
+            avgHours,
+            missingExit,
+            overtime: 0,
+            totalEmployees,
+        };
+    }
+
+    async getReportsRows(query: any) {
+        const mode = query.mode;
+        const timezone = query?.timezone ?? "Asia/Kolkata";
+        let fromDate: string;
+        let toDate: string;
+
+        if (mode === "daily") {
+            const date = query.date ?? todayDate();
+            fromDate = date;
+            toDate = date;
+        } else if (mode === "monthly") {
+            const month = query.month ?? DateTime.now().setZone(timezone).toFormat("yyyy-MM");
+            const { monthStartDate, monthEndDate } = this.getMonthBounds(month, timezone);
+            fromDate = monthStartDate;
+            toDate = monthEndDate;
+        } else {
+            fromDate = query.startDate;
+            toDate = query.endDate;
+        }
+
+        const match: any = { date: { $gte: fromDate, $lte: toDate } };
+        if (query.employeeId) Object.assign(match, this.getEmployeeIdQuery(query.employeeId));
+
+        if (query.department) {
+            const deptEmployees = await EmployeeModel.find({ department: query.department }, { id: 1, _id: 1 }).lean();
+            const ids = deptEmployees.map((e: any) => e.id).filter(Boolean);
+            const objIds = deptEmployees.map((e: any) => e._id?.toString?.()).filter(Boolean);
+            const combined = [...ids, ...objIds];
+            if (combined.length === 0) {
+                return { mode, rows: [], pagination: { page: query.page ?? 1, pageSize: query.pageSize ?? 25, total: 0, totalPages: 0 } };
+            }
+            match.$or = [{ employeeId: { $in: combined } }];
+        }
+
+        // aggregate per employee
+        const agg = await AttendanceModel.aggregate([
+            { $match: match },
+            { $sort: { entryAt: 1 } },
+            { $group: { _id: "$employeeId", sessions: { $push: "$ROOT" }, firstEntry: { $first: "$entryAt" }, lastExit: { $last: "$exitAt" }, lastSeenAt: { $last: "$lastSeenAt" }, totalDurationMs: { $sum: { $ifNull: ["$durationMs", 0] } } } },
+        ]).allowDiskUse(true).exec();
+
+        const normalizeEmployeeKey = (value: any): string | null => {
+            if (value === null || value === undefined) return null;
+            if (typeof value === "string") return value;
+            if (typeof value === "object" && typeof value.toString === "function") return value.toString();
+            return String(value);
+        };
+
+        const employeeKeys = agg.map((a: any) => normalizeEmployeeKey(a._id)).filter(Boolean) as string[];
+        const objectIdKeys = employeeKeys.filter((id) => ObjectId.isValid(id)).map((id) => new ObjectId(id));
+
+        const employees = employeeKeys.length > 0
+            ? await EmployeeModel.find(
+                { $or: [{ _id: { $in: objectIdKeys } }, { id: { $in: employeeKeys } }] },
+                { meanEmbedding: 0, embeddings: 0 }
+            ).lean()
+            : [];
+        const empMap = new Map<string, any>();
+        for (const emp of employees) {
+            if (emp.id) {
+                empMap.set(String(emp.id), emp);
+            }
+            if (emp._id) {
+                empMap.set(String(emp._id), emp);
+            }
+        }
+
+        const rows = agg.map((a: any) => {
+            const employeeKey = normalizeEmployeeKey(a._id);
+            const emp = employeeKey ? (empMap.get(employeeKey) ?? null) : null;
+            const firstEntry = a.firstEntry ?? null;
+            const lastExit = a.lastExit ?? null;
+            const lastSeenAt = a.lastSeenAt;
+            const workMinutes = Math.round((a.totalDurationMs ?? 0) / 60000);
+            const workHours = workMinutes > 0 ? `${Math.floor(workMinutes / 60)}h ${workMinutes % 60}m` : null;
+            const isLate = firstEntry ? this.isLateEntry(Number(firstEntry), timezone) : false;
+
+            return {
+                id: `${mode}_${fromDate}_${employeeKey ?? "unknown"}`,
+                employeeId: emp?.id ?? employeeKey ?? null,
+                name: emp?.name ?? "Unknown Person",
+                avatar: "https://minio.mssplonline.in" + "/facevision/" + (emp?.faceImages?.[0] ?? null),
+                department: emp?.department ?? null,
+                entryTime: firstEntry ? this.toIsoWithZone(Number(firstEntry), timezone) : null,
+                exitTime: lastExit ? this.toIsoWithZone(Number(lastExit), timezone) : null,
+                lastSeenAt: lastSeenAt ? this.toIsoWithZone(Number(lastSeenAt), timezone) : null,
+                workHours,
+                status: firstEntry ? "Present" : "Absent",
+                lateStatus: Boolean(isLate),
+                missingExit: a.sessions.some((s: any) => !s.exitAt),
+            };
+        });
+
+        const page = Number(query.page ?? 1);
+        const pageSize = Number(query.pageSize ?? 25);
+        const total = rows.length;
+        const totalPages = Math.ceil(total / pageSize);
+        const paginated = rows.slice((page - 1) * pageSize, (page - 1) * pageSize + pageSize);
+
+        return {
+            mode,
+            rows: paginated,
+            pagination: { page, pageSize, total, totalPages },
+        };
+    }
+
+    async getReportEmployeeTimeline(employeeId: string, query: any) {
+        const employee = await this.resolveEmployee(employeeId);
+        if (!employee) throw new ApiError(StatusCodes.NOT_FOUND, "Employee not found", [{ field: "employeeId", message: "Employee not found" }]);
+
+        const timezone = query?.timezone ?? "Asia/Kolkata";
+        const date = query?.date ?? todayDate();
+        const month = query?.month ?? DateTime.fromISO(date, { zone: timezone }).toFormat("yyyy-MM");
+
+        const timeline = await this.getEmployeeTimelineByDate(employeeId, { date, timezone });
+        const monthly = await this.getEmployeeMonthlySummary(employeeId, { month, timezone });
+
+        const events = (timeline.events || []).map((e: any) => ({
+            id: e.eventId ?? `${e.type}_${e.timestamp}`,
+            type: e.type === "ENTRY" ? "ENTRY_DETECTED" : "EXIT_CONFIRMED",
+            timestamp: e.timestamp,
+            cameraSource: e.cameraName ?? null,
+            confidence: e.confidence ?? null,
+            statusBadge: e.status === "VERIFIED" ? "success" : e.status === "UNKNOWN" ? "warning" : "default",
+        }));
+
+        return {
+            employee: {
+                id: employee._id?.toString?.() ?? employee.id,
+                employeeId: employee.id ?? employee._id?.toString?.(),
+                name: employee.name,
+                avatar: employee.faceImages?.[0] ?? null,
+                department: employee.department ?? null,
+                role: employee.role ?? null,
+            },
+            monthlyStats: {
+                present: monthly.presentDays ?? 0,
+                absent: (monthly.workingDays ?? 0) - (monthly.presentDays ?? 0),
+                late: monthly.lateArrivals ?? 0,
+            },
+            events,
+        };
+    }
+
     getCurrentState = async (query: any) => {
         const date = query?.date ?? todayDate();
         const limit = typeof query?.limit === "number" ? query.limit : 100;
@@ -592,7 +803,7 @@ export default class AttendanceService {
         let totalDurationMs = 0;
         for (const session of sessions) {
             // if durationMs is present, means session closed properly with exitAt and durationMs
-            if (typeof session.durationMs === "number" && session.exitAt) { 
+            if (typeof session.durationMs === "number" && session.exitAt) {
                 totalDurationMs += session.durationMs;
             } else if (session.isExitMissing && session.exitSource === "SYSTEM_RECOVERY") {
                 totalDurationMs += Math.max(0, Number(session.lastSeenAt) - Number(session.entryAt));
@@ -1002,12 +1213,12 @@ export default class AttendanceService {
                         entryCameraCode,
                     },
                 },
-                { 
-                    upsert: true, 
-                    new: true, 
-                    setDefaultsOnInsert: true, 
-                    sort: { entryAt: -1 }, 
-                    session 
+                {
+                    upsert: true,
+                    new: true,
+                    setDefaultsOnInsert: true,
+                    sort: { entryAt: -1 },
+                    session
                 }
             ).lean();
             return updated;
@@ -1029,7 +1240,7 @@ export default class AttendanceService {
                 { sort: { entryAt: -1 }, new: true } // 👈 ensures latest session, return updated
             ).lean().session(session ?? null);
 
-            if(session){
+            if (session) {
                 query.session(session);
             }
             const updated = await query;
