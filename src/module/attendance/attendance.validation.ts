@@ -143,6 +143,7 @@ export const reportsExportBodySchema = z.object({
     format: z.enum(["csv", "xlsx"]).default("csv"),
     timezone: timezoneSchema,
     registeredOnly: z.coerce.boolean().optional().default(true),
+    includeTimeline: z.coerce.boolean().optional().default(true),
 }).superRefine((value, ctx) => {
     if (value.mode === "daily" && !value.date) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["date"], message: "date is required for daily mode" });

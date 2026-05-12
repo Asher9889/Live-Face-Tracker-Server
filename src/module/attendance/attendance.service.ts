@@ -13,9 +13,10 @@ import {
     AttendanceEmployeeSessionQueryDTO,
     AttendanceEventDTO,
     AttendanceEventsQueryDTO,
-    AttendenceQueryDTO
+    AttendenceQueryDTO,
+    ReportsExportBodyDTO
 } from "./attendance.types";
-import { logger, todayDate } from "../../utils";
+import { convertIdToEmpId, formatTime, logger, todayDate } from "../../utils";
 import { ObjectId } from "mongodb";
 import mongoose, { PipelineStage } from "mongoose";
 import { envConfig } from "../../config";
@@ -104,11 +105,106 @@ export default class AttendanceService {
         const { date, timezone } = query;
         const { dayStartMs, dayEndMs } = this.getDayBounds(date, timezone);
 
-        const logs = await PresenceLogModel.find({
-            employeeId,
-            eventType: { $in: ["ENTRY_DETECTED", "FACE_DETECTED", "EXIT_DETECTED", "PENDING_EXIT", "EXIT_PENDING", "EXIT_CANCELLED", "AUTO_EXIT_TIMEOUT", "SYSTEM_RECOVERY", "MANUAL_CORRECTION"] },
-            occurredAt: { $gte: dayStartMs, $lte: dayEndMs },
-        }).sort({ occurredAt: 1 }).hint({ employeeId: 1, eventType: 1, occurredAt: 1 }).lean();
+        // const logs = await PresenceLogModel.find({
+        //     employeeId,
+        //     eventType: { $in: ["ENTRY_DETECTED", "FACE_DETECTED", "EXIT_DETECTED", "PENDING_EXIT", "EXIT_PENDING", "EXIT_CANCELLED", "AUTO_EXIT_TIMEOUT", "SYSTEM_RECOVERY", "MANUAL_CORRECTION"] },
+        //     occurredAt: { $gte: dayStartMs, $lte: dayEndMs },
+        // }).sort({ occurredAt: 1 }).hint({ employeeId: 1, eventType: 1, occurredAt: 1 }).lean();
+
+        const logs = await PresenceLogModel.aggregate([
+            {
+                $match: {
+                    employeeId,
+                    eventType: {
+                        $in: [
+                            "ENTRY_DETECTED",
+                            "FACE_DETECTED",
+                            "EXIT_DETECTED",
+                            "PENDING_EXIT",
+                            "EXIT_PENDING",
+                            "EXIT_CANCELLED",
+                            "AUTO_EXIT_TIMEOUT",
+                            "SYSTEM_RECOVERY",
+                            "MANUAL_CORRECTION",
+                        ],
+                    },
+                    occurredAt: {
+                        $gte: dayStartMs,
+                        $lte: dayEndMs,
+                    },
+                },
+            },
+
+            // Important for window functions
+            {
+                $sort: {
+                    occurredAt: 1,
+                },
+            },
+
+            {
+                $setWindowFields: {
+                    sortBy: { occurredAt: 1 },
+                    output: {
+                        prevOccurredAt: {
+                            $shift: {
+                                output: "$occurredAt",
+                                by: -1,
+                            },
+                        },
+                        prevCameraCode: {
+                            $shift: {
+                                output: "$cameraCode",
+                                by: -1,
+                            },
+                        },
+                    },
+                },
+            },
+
+            {
+                $addFields: {
+                    diffMs: {
+                        $subtract: ["$occurredAt", "$prevOccurredAt"],
+                    },
+
+                    shouldSkip: {
+                        $and: [
+                            {
+                                $eq: ["$cameraCode", "$prevCameraCode"],
+                            },
+                            {
+                                $lt: [
+                                    {
+                                        $subtract: ["$occurredAt", "$prevOccurredAt"],
+                                    },
+                                    2 * 60 * 1000,
+                                ],
+                            },
+                        ],
+                    },
+                },
+            },
+
+            {
+                $match: {
+                    shouldSkip: {
+                        $ne: true,
+                    },
+                },
+            },
+
+            {
+                $project: {
+                    prevOccurredAt: 0,
+                    prevCameraCode: 0,
+                    diffMs: 0,
+                    shouldSkip: 0,
+                },
+            },
+        ]);
+
+
 
         const cameraMap = await this.getCameraMap(logs.map((log: any) => log.cameraCode).filter(Boolean));
 
@@ -411,7 +507,7 @@ export default class AttendanceService {
         };
     }
 
-     getReportsRows = async(query: any) => {
+    getReportsRows = async (query: any) => {
         const mode = query.mode;
         const timezone = query?.timezone ?? "Asia/Kolkata";
         const today = todayDate();
@@ -438,7 +534,7 @@ export default class AttendanceService {
         if (query.employeeId) Object.assign(match, this.getEmployeeIdQuery(query.employeeId));
 
         if (query.department) {
-            const deptEmployees = await EmployeeModel.find({ department: {$regex: query.department, $options: "i"} }, { _id: 1 }).lean();
+            const deptEmployees = await EmployeeModel.find({ department: { $regex: query.department, $options: "i" } }, { _id: 1 }).lean();
 
             logger.info("Department employees for query:", query.department, deptEmployees.length);
             // const ids = deptEmployees.map((e: any) => e._id).filter(Boolean);
@@ -596,7 +692,7 @@ export default class AttendanceService {
         const monthly = await this.getEmployeeMonthlySummary(employeeId, monthlyQuery as any);
 
         const events = (timeline.events || []).map((e: any) => {
-            let type = e.type ;
+            let type = e.type;
             return {
                 id: e.eventId ?? `${e.type}_${e.timestamp}`,
                 type: type === "ENTRY" ? "ENTRY" : "EXIT",
@@ -1965,118 +2061,156 @@ export default class AttendanceService {
         return text;
     }
 
-    async exportAttendanceReport(query: any) {
-        const date = query?.date ?? todayDate();
-        const scope = query?.scope ?? "ALL_EMPLOYEES";
+    exportAttendanceReport = async (query: ReportsExportBodyDTO) => {
+        const mode = query?.mode ?? "daily";
+        const timezone = query?.timezone ?? "Asia/Kolkata";
         const format = query?.format ?? "csv";
-        const employeeIds = query?.employeeIds ?? [];
-        const department = query?.department;
+        const rawScope = query?.scope ?? "ALL_ROWS";
+        // no backward-compat mappings required — use scope as provided by client
+        const scope = rawScope;
+        const filters = query?.filters ?? {};
+        const rowIds = Array.isArray(query?.rowIds) ? query.rowIds : [];
+        const employeeIds = Array.isArray(query?.employeeIds) ? query.employeeIds : [];
         const registeredOnly = typeof query?.registeredOnly === "boolean" ? query.registeredOnly : true;
-        const timezone = query?.timezone ?? "UTC";
 
-        let targetEmployeeIds: string[] = [];
+        const qAny = query as any;
+        const rowsQuery: any = {
+            mode,
+            timezone,
+            page: 1,
+            pageSize: 100000,
+        };
+
+        if (mode === "daily") {
+            rowsQuery.date = query?.date ?? todayDate();
+        } else if (mode === "monthly") {
+            rowsQuery.month = query?.month ?? DateTime.now().setZone(timezone).toFormat("yyyy-MM");
+        } else {
+            rowsQuery.startDate = query?.startDate;
+            rowsQuery.endDate = query?.endDate;
+        }
+
+        rowsQuery.employeeId = filters?.employeeId ?? qAny.employeeId;
+        rowsQuery.employeeName = filters?.employeeName ?? qAny.employeeName;
+        rowsQuery.department = filters?.department ?? qAny.department;
+        rowsQuery.status = filters?.status ?? qAny.status;
+        rowsQuery.lateOnly = typeof filters?.lateOnly === "boolean" ? filters.lateOnly : qAny.lateOnly;
+        rowsQuery.missingExitOnly = typeof filters?.missingExitOnly === "boolean" ? filters.missingExitOnly : qAny.missingExitOnly;
+
+        const rowsResponse = await this.getReportsRows(rowsQuery);
+        let exportRows = Array.isArray(rowsResponse?.rows) ? rowsResponse.rows : [];
+
+        if (scope === "SELECTED_ROWS") {
+            const rowIdSet = new Set(rowIds);
+            exportRows = exportRows.filter((row: any) => rowIdSet.has(row.id));
+        } else if (scope === "SELECTED_EMPLOYEES") {
+            const employeeSet = new Set(employeeIds.map((id: string) => String(id)));
+            exportRows = exportRows.filter((row: any) => employeeSet.has(String(row.employeeId)));
+        }
+
+        if (registeredOnly) {
+            exportRows = exportRows.filter((row: any) => row?.name && row.name !== "Unknown Person");
+        }
+
+        let rows: Record<string, any>[] = [];
+        let headers: string[] = [];
+        // Build timeline rows for selected employees. The export contract is timeline-first.
+        let timelineEmployeeIds: string[] = [];
 
         if (scope === "SELECTED_EMPLOYEES" && employeeIds.length > 0) {
-            targetEmployeeIds = employeeIds;
-        } else if (scope === "ALL_EMPLOYEES") {
-            const filter: any = {};
-            if (department) {
-                filter.department = department;
+            timelineEmployeeIds = employeeIds;
+        } else if (scope === "SELECTED_ROWS" && exportRows.length > 0) {
+            timelineEmployeeIds = Array.from(new Set(exportRows.map((r: any) => String(r.employeeId)).filter(Boolean)));
+        } else if (scope === "ALL_ROWS" && exportRows.length > 0) {
+            timelineEmployeeIds = Array.from(new Set(exportRows.map((r: any) => String(r.employeeId)).filter(Boolean)));
+        }
+
+        headers = ["Row Type", "Employee Id", "Name", "Department", "Entry Time", "Exit Time", "Last Seen At", "Work Hours", "Status", "Current Status", "Late Status", "Missing Exit", "Event Id", "Event Type", "Event Name", "Time", "Camera", "Confidence", "Event Status"];
+
+        if (timelineEmployeeIds.length === 0) {
+            rows = [];
+        } else {
+            const timelineRows: Record<string, any>[] = [];
+            const timelineDate = rowsQuery.date ?? todayDate();
+
+            for (const empId of timelineEmployeeIds) {
+                try {
+                    const timeline = await this.getReportEmployeeTimeline(empId, { date: timelineDate, timezone });
+
+                    logger.info(`Building timeline for employee ${empId}, found ${timeline.events?.length ?? 0} events`);
+                    const emp = timeline.employee;
+                    const parentRow: any = exportRows.find((row: any) => String(row.employeeId) === String(empId)) ?? {};
+
+                    timelineRows.push({
+                        "Row Type": "EMPLOYEE",
+                        "Employee Id": convertIdToEmpId(emp.employeeId) ?? "",
+                        "Name": emp.name ?? "",
+                        "Department": emp.department ?? "",
+                        "Entry Time": formatTime(parentRow.entryTime) ?? "",
+                        "Exit Time": parentRow.exitTime ? formatTime(parentRow.exitTime)  : "--",
+                        "Last Seen At": formatTime(parentRow.lastSeenAt) ?? "",
+                        "Work Hours": parentRow.workHours ?? "",
+                        "Status": parentRow.status ?? "",
+                        "Current Status": parentRow.currentStatus ?? "",
+                        "Late Status": parentRow.lateStatus ? "Yes" : "No",
+                        "Missing Exit": parentRow.missingExit ? "Yes" : "No",
+                        "Event Id": "",
+                        "Event Type": "",
+                        "Event Name": "",
+                        "Time": "",
+                        "Camera": "",
+                        "Confidence": "",
+                        "Event Status": "",
+                    });
+
+                    const evts = timeline.events ?? [];
+                    for (const e of evts) {
+                        timelineRows.push({
+                            "Row Type": "EVENT",
+                            "Employee Id": convertIdToEmpId(emp.employeeId) ?? "",
+                            "Name": "",
+                            "Department": "",
+                            "Entry Time": "",
+                            "Exit Time": "",
+                            "Last Seen At": "",
+                            "Work Hours": "",
+                            "Status": "",
+                            "Current Status": "",
+                            "Late Status": "",
+                            "Missing Exit": "",
+                            "Event Id": e.id ?? "",
+                            "Event Type": e.type ?? "",
+                            "Event Name": e.eventName ?? "",
+                            "Time": formatTime(e.timestamp, { showSeconds: true }),
+                            "Camera": e.cameraSource ?? "",
+                            "Confidence": e.confidence ?? "",
+                            "Event Status": e.statusBadge ?? "",
+                        });
+                    }
+                } catch (err) {
+                    logger.error({ empId, err: String(err) }, "Error building timeline for employee");
+                }
             }
-            const employees = await EmployeeModel.find(filter, { _id: 1, id: 1 }).lean();
-            targetEmployeeIds = employees.map((e: any) => e.id ?? e._id?.toString?.()).filter(Boolean);
+
+            rows = timelineRows;
         }
-
-        const attendanceMatch: Record<string, any> = { date };
-        const matchOr: any[] = [];
-        for (const empId of targetEmployeeIds) {
-            if (ObjectId.isValid(empId)) {
-                matchOr.push({ employeeId: new ObjectId(empId) });
-            }
-            matchOr.push({ employeeId: empId });
-        }
-
-        if (matchOr.length > 0) {
-            attendanceMatch.$or = matchOr;
-        }
-
-        const sessions = await AttendanceModel.find(attendanceMatch).sort({ entryAt: 1 }).lean();
-
-        const employeeKeys = [...new Set(sessions.map((s: any) => String(s.employeeId)))];
-        const employees = employeeKeys.length > 0
-            ? await EmployeeModel.find({ $or: [{ id: { $in: employeeKeys } }, { _id: { $in: employeeKeys.filter((id) => ObjectId.isValid(id)).map((id) => new ObjectId(id)) } }] }).lean()
-            : [];
-
-        const empMap = new Map<string, any>();
-        for (const emp of employees) {
-            empMap.set(emp.id ?? emp._id?.toString?.(), emp);
-        }
-
-        const grouped = new Map<string, any[]>();
-        for (const session of sessions as any[]) {
-            const key = String(session.employeeId);
-            const list = grouped.get(key) ?? [];
-            list.push(session);
-            grouped.set(key, list);
-        }
-
-        const rows = Array.from(grouped.entries()).map(([empKey, empSessions]) => {
-            const emp = empMap.get(empKey);
-            const ordered = [...empSessions].sort((l, r) => Number(l.entryAt) - Number(r.entryAt));
-            const firstEntry = ordered[0]?.entryAt;
-            const lastSeen = ordered.reduce((max: number | null, s: any) => {
-                const ts = Number(s.exitAt ?? s.entryAt ?? 0);
-                return max === null || ts > max ? ts : max;
-            }, null);
-            const totalDuration = ordered.reduce((sum: number, s: any) => sum + Number(s.durationMs ?? 0), 0);
-            const isPresent = ordered.length > 0 ? "Yes" : "No";
-            const isLate = firstEntry && firstEntry > envConfig.officeStartTime ? "Yes" : "No";
-            const isEarlyExit = ordered.some((s: any) => s.exitAt && s.exitAt < envConfig.officeEndTime) ? "Yes" : "No";
-
-            return {
-                employeeId: emp?.id ?? empKey,
-                employeeCode: emp?.id ?? empKey,
-                employeeName: emp?.name ?? "Unknown",
-                department: emp?.department ?? "",
-                role: emp?.role ?? "",
-                date,
-                firstEntryAt: firstEntry ? this.toIsoWithZone(Number(firstEntry), timezone) : "",
-                lastSeenAt: lastSeen ? this.toIsoWithZone(lastSeen, timezone) : "",
-                totalWorkDurationMinutes: Math.round(totalDuration / 60000),
-                breakDurationMinutes: 0,
-                currentStatus: ordered.some((s: any) => !s.exitAt) ? "ONGOING" : (ordered.length > 0 ? "COMPLETED" : "ABSENT"),
-                flags: "",
-                present: isPresent,
-                lateArrival: isLate,
-                earlyExit: isEarlyExit,
-            };
-        });
-
-        const headers = [
-            "employeeId",
-            "employeeCode",
-            "employeeName",
-            "department",
-            "role",
-            "date",
-            "firstEntryAt",
-            "lastSeenAt",
-            "totalWorkDurationMinutes",
-            "breakDurationMinutes",
-            "currentStatus",
-            "flags",
-            "present",
-            "lateArrival",
-            "earlyExit",
-        ];
 
         const isXlsx = format === "xlsx";
         const mimeType = isXlsx
             ? "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             : "text/csv";
 
-        const scopeLabel = scope === "ALL_EMPLOYEES" ? "all-employees" : `employees-${employeeIds.length}`;
-        const fileName = `attendance-report-${scopeLabel}-${date}.${isXlsx ? "xlsx" : "csv"}`;
+        const dateLabel = mode === "daily"
+            ? (rowsQuery.date ?? todayDate())
+            : mode === "monthly"
+                ? (rowsQuery.month ?? DateTime.now().setZone(timezone).toFormat("yyyy-MM"))
+                : `${rowsQuery.startDate ?? "start"}_to_${rowsQuery.endDate ?? "end"}`;
+        const scopeLabel = scope === "ALL_ROWS"
+            ? "all-rows"
+            : scope === "SELECTED_ROWS"
+                ? `rows-${rowIds.length}`
+                : `employees-${employeeIds.length}`;
+        const fileName = `attendance-report-${mode}-${scopeLabel}-${dateLabel}.${isXlsx ? "xlsx" : "csv"}`;
 
         const content = isXlsx
             ? await this.buildAttendanceReportXlsx(headers, rows)

@@ -1,6 +1,6 @@
 import express from "express";
 import { attendanceController } from "./attendance.module";
-import { validateQuery } from "../../middlewares";
+import { validate, validateQuery } from "../../middlewares";
 import {
 	attendanceDateQuerySchema,
 	attendanceCalendarQuerySchema,
@@ -9,6 +9,7 @@ import {
 	attendanceEmployeeTimelineQuerySchema,
 	reportsSummaryQuerySchema,
 	reportsRowsQuerySchema,
+	reportsExportBodySchema,
 	attendanceEventsQuerySchema,
 	attendanceRangeQuerySchema,
 	attendanceCurrentStateQuerySchema,
@@ -31,6 +32,6 @@ router.get("/reports/rows", validateQuery(reportsRowsQuerySchema), attendanceCon
 router.get("/employees/:employeeId/calendar", validateQuery(attendanceCalendarQuerySchema), attendanceController.getEmployeeCalendarByMonth);
 router.get("/employees/:employeeId/export", validateQuery(attendanceEmployeeExportQuerySchema), attendanceController.exportEmployeeHistory);
 router.get("/export-jobs/:jobId", attendanceController.getAttendanceExportJob);
-router.post("/reports/export", (attendanceController as any).exportAttendanceReport);
+router.post("/reports/export", validate(reportsExportBodySchema), (attendanceController as any).exportAttendanceReport);
 
 export default router;

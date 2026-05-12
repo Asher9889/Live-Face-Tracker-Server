@@ -7,5 +7,7 @@ import miliSecondsToISoDate, { todayDate } from "./miliSecondsToISoDate";
 import createHttpLogger from "./logger/pino.logger";
 import saveUnknownDebugImages from "./saveUnknownDebugImages";
 import { logger } from "./logger/pino.logger";
+import { convertIdToEmpId, formatTime } from "./utils";
 
-export { logger, createHttpLogger, todayDate, parseDuration, miliSecondsToISoDate, ApiError, ApiResponse, routeNotExistsHandler, globalErrorHandler, saveUnknownDebugImages };
+
+export { formatTime, convertIdToEmpId, logger, createHttpLogger, todayDate, parseDuration, miliSecondsToISoDate, ApiError, ApiResponse, routeNotExistsHandler, globalErrorHandler, saveUnknownDebugImages };

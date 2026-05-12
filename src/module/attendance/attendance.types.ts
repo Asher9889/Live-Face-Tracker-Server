@@ -3,6 +3,7 @@ import {
   attendanceDateQuerySchema,
   reportsSummaryQuerySchema,
   reportsRowsQuerySchema,
+  reportsExportBodySchema,
   attendanceCalendarQuerySchema,
   attendanceEmployeeExportQuerySchema,
   attendanceEmployeeSummaryQuerySchema,
@@ -32,6 +33,7 @@ export type AttendanceEmployeeCalendarQueryDTO = z.infer<typeof attendanceCalend
 export type AttendanceEmployeeExportQueryDTO = z.infer<typeof attendanceEmployeeExportQuerySchema>;
 export type AttendanceCurrentStateQueryDTO = z.infer<typeof attendanceCurrentStateQuerySchema>;
 export type AttendanceReportExportBodyDTO = z.infer<typeof attendanceReportExportBodySchema>;
+export type ReportsExportBodyDTO = z.infer<typeof reportsExportBodySchema>;
 export type AttendanceEmployeeSessionQueryDTO = z.infer<typeof attendanceEmployeeSessionQuerySchema>;
 export type ReportsSummaryQueryDTO = z.infer<typeof reportsSummaryQuerySchema>;
 export type ReportsRowsQueryDTO = z.infer<typeof reportsRowsQuerySchema>;
