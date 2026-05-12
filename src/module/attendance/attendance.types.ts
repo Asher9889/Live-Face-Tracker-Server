@@ -38,6 +38,52 @@ export type AttendanceEmployeeSessionQueryDTO = z.infer<typeof attendanceEmploye
 export type ReportsSummaryQueryDTO = z.infer<typeof reportsSummaryQuerySchema>;
 export type ReportsRowsQueryDTO = z.infer<typeof reportsRowsQuerySchema>;
 
+export interface ReportsSummaryData {
+  present: number;
+  absent: number;
+  late: number;
+  avgHours: string;
+  missingExit: number;
+  overtime: number;
+  totalEmployees: number;
+}
+
+export interface ReportRowDaily {
+  id: string;
+  employeeId: string;
+  name: string;
+  avatar?: string | null;
+  department?: string | null;
+  entryTime?: string | null;
+  exitTime?: string | null;
+  lastSeenAt?: string | null;
+  workHours?: string | null;
+  status: "Present" | "Absent" | "Late" | "Half Day";
+  currentStatus: "In" | "Out";
+  lateStatus: boolean;
+  missingExit: boolean;
+}
+
+export interface ReportRowMonthly {
+  id: string;
+  employeeId: string;
+  name: string;
+  avatar?: string | null;
+  department?: string | null;
+  presentDays: number;
+  absentDays: number;
+  lateCount: number;
+  avgWorkHours: string;
+  overtimeDays: number;
+  missingExits: number;
+}
+
+export type ReportsRowsData<T = ReportRowDaily | ReportRowMonthly> = {
+  mode: "daily" | "monthly" | "custom";
+  rows: T[];
+  pagination: { page: number; pageSize: number; total: number; totalPages: number };
+};
+
 export type AttendenceFilterDTO = {
     lastChangedAt?: {
         $gte: string;

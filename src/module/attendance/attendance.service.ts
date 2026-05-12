@@ -461,6 +461,26 @@ export default class AttendanceService {
             toDate = query.endDate;
         }
 
+        if (mode === "monthly") {
+            const monthlyRows = await this.buildMonthlyReportRows(query, fromDate, toDate, timezone);
+            const totalEmployeesMatch = this.buildEmployeeMatchQuery(query);
+            const totalEmployees = await EmployeeModel.countDocuments(totalEmployeesMatch);
+            const present = monthlyRows.pagination.total;
+            const monthlyTotals = monthlyRows.totals ?? { totalDurationMinutes: 0, lateCount: 0, missingExits: 0, overtimeDays: 0 };
+            const totalDurationMs = monthlyTotals.totalDurationMinutes * 60000;
+            const avgMinutes = present > 0 ? Math.round(totalDurationMs / present / 60000) : 0;
+
+            return {
+                present,
+                absent: Math.max(0, totalEmployees - present),
+                late: monthlyTotals.lateCount,
+                avgHours: `${Math.floor(avgMinutes / 60)}h ${avgMinutes % 60}m`,
+                missingExit: monthlyTotals.missingExits,
+                overtime: monthlyTotals.overtimeDays,
+                totalEmployees,
+            };
+        }
+
         const match: any = { date: { $gte: fromDate, $lte: toDate } };
         if (query.employeeId) Object.assign(match, this.getEmployeeIdQuery(query.employeeId));
 
@@ -528,6 +548,15 @@ export default class AttendanceService {
         } else {
             fromDate = query.startDate;
             toDate = query.endDate;
+        }
+
+        if (mode === "monthly") {
+            const monthlyRows = await this.buildMonthlyReportRows(query, fromDate, toDate, timezone);
+            return {
+                mode,
+                rows: monthlyRows.rows,
+                pagination: monthlyRows.pagination,
+            };
         }
 
         const match: any = { date: { $gte: fromDate, $lte: toDate } };
@@ -1974,6 +2003,203 @@ export default class AttendanceService {
         return count;
     }
 
+    private formatMinutesToHoursMinutes(totalMinutes: number) {
+        const roundedMinutes = Math.max(0, Math.round(totalMinutes));
+        const hours = Math.floor(roundedMinutes / 60);
+        const minutes = roundedMinutes % 60;
+
+        return `${hours}h ${minutes}m`;
+    }
+
+    private matchesTextFilter(value: string | null | undefined, filter: string | undefined) {
+        if (!filter) return true;
+        const normalizedValue = String(value ?? "").trim().toLowerCase();
+        const normalizedFilter = String(filter).trim().toLowerCase();
+        return normalizedValue.includes(normalizedFilter);
+    }
+
+    private buildEmployeeMatchQuery(query: any) {
+        const andConditions: Record<string, any>[] = [];
+
+        if (query.employeeId) {
+            andConditions.push({
+                $or: [
+                    { id: query.employeeId },
+                    ...(ObjectId.isValid(query.employeeId) ? [{ _id: new ObjectId(query.employeeId) }] : []),
+                ],
+            });
+        }
+
+        if (query.employeeName) {
+            andConditions.push({ name: { $regex: query.employeeName.trim(), $options: "i" } });
+        }
+
+        if (query.department) {
+            andConditions.push({ department: { $regex: query.department.trim(), $options: "i" } });
+        }
+
+        if (andConditions.length === 0) {
+            return {};
+        }
+
+        if (andConditions.length === 1) {
+            return andConditions[0];
+        }
+
+        return { $and: andConditions };
+    }
+
+    private async buildMonthlyReportRows(query: any, fromDate: string, toDate: string, timezone: string) {
+        const attendanceMatch: Record<string, any> = {
+            date: { $gte: fromDate, $lte: toDate },
+        };
+
+        if (query.employeeId) {
+            Object.assign(attendanceMatch, this.getEmployeeIdQuery(query.employeeId));
+        }
+
+        const sessions = await AttendanceModel.find(attendanceMatch).sort({ entryAt: 1 }).lean();
+
+        if (sessions.length === 0) {
+            return {
+                rows: [],
+                pagination: { page: Number(query.page ?? 1), pageSize: Number(query.pageSize ?? 25), total: 0, totalPages: 0 },
+            };
+        }
+
+        const employeeIds = [...new Set(sessions.map((session: any) => String(session.employeeId)).filter(Boolean))];
+        const objectIdKeys = employeeIds.filter((id) => ObjectId.isValid(id)).map((id) => new ObjectId(id));
+
+        const employees = employeeIds.length > 0
+            ? await EmployeeModel.find(
+                { $or: [{ _id: { $in: objectIdKeys } }, { id: { $in: employeeIds } }] },
+                { meanEmbedding: 0, embeddings: 0 }
+            ).lean()
+            : [];
+
+        const empMap = new Map<string, any>();
+        for (const emp of employees as any[]) {
+            if (emp.id) empMap.set(String(emp.id), emp);
+            if (emp._id) empMap.set(String(emp._id), emp);
+        }
+
+        const groupedByEmployee = new Map<string, any[]>();
+        for (const session of sessions as any[]) {
+            const key = String(session.employeeId);
+            const current = groupedByEmployee.get(key) ?? [];
+            current.push(session);
+            groupedByEmployee.set(key, current);
+        }
+
+        const workingDays = this.countWorkingDays(fromDate, toDate, timezone);
+        const officeDurationMs = Math.max(0, envConfig.officeEndTime - envConfig.officeStartTime);
+        const statusFilter = Array.isArray(query.status) ? query.status : [];
+
+        const rows = Array.from(groupedByEmployee.entries()).map(([employeeKey, employeeSessions]) => {
+            const orderedSessions = [...employeeSessions].sort((left, right) => Number(left.entryAt) - Number(right.entryAt));
+            const emp = empMap.get(employeeKey) ?? null;
+            const name = emp?.name ?? "Unknown Person";
+            const department = emp?.department ?? null;
+
+            if (!this.matchesTextFilter(name, query.employeeName) || !this.matchesTextFilter(department, query.department)) {
+                return null;
+            }
+
+            const groupedByDay = this.groupSessionsByDate(orderedSessions);
+            let totalDurationMs = 0;
+            let lateCount = 0;
+            let missingExits = 0;
+            let overtimeDays = 0;
+
+            for (const [, day] of groupedByDay) {
+                totalDurationMs += Number(day.totalDurationMs ?? 0);
+
+                if (day.firstEntryAt && this.isLateEntry(Number(day.firstEntryAt), timezone)) {
+                    lateCount += 1;
+                }
+
+                if (day.sessions.some((session: any) => !session.exitAt)) {
+                    missingExits += 1;
+                }
+
+                if (Number(day.totalDurationMs ?? 0) > officeDurationMs) {
+                    overtimeDays += 1;
+                }
+            }
+
+            if (statusFilter.length > 0) {
+                const hasEmployee = Boolean(emp);
+                const wantsVerified = statusFilter.includes("VERIFIED");
+                const wantsUnknown = statusFilter.includes("UNKNOWN");
+                if ((hasEmployee && !wantsVerified) || (!hasEmployee && !wantsUnknown)) {
+                    return null;
+                }
+            }
+
+            const presentDays = groupedByDay.size;
+            const avgWorkHours = presentDays > 0
+                ? this.formatMinutesToHoursMinutes(totalDurationMs / 60000 / presentDays)
+                : "0h 0m";
+
+            return {
+                id: `monthly_${toDate}_${employeeKey}`,
+                employeeId: emp?.id ?? employeeKey,
+                name,
+                avatar: emp?.faceImages?.[0] ? `https://minio.mssplonline.in/facevision/${emp.faceImages[0]}` : null,
+                department,
+                presentDays,
+                absentDays: Math.max(0, workingDays - presentDays),
+                lateCount,
+                avgWorkHours,
+                overtimeDays,
+                missingExits,
+                _totalDurationMinutes: Math.round(totalDurationMs / 60000),
+            };
+        }).filter(Boolean) as Array<Record<string, any> & { _totalDurationMinutes: number }>;
+
+        const sortBy = query.sortBy ?? "name";
+        const sortOrder = query.sortOrder === "desc" ? -1 : 1;
+
+        rows.sort((left, right) => {
+            let comparison = 0;
+
+            if (sortBy === "presentDays") {
+                comparison = left.presentDays - right.presentDays;
+            } else if (sortBy === "lateCount") {
+                comparison = left.lateCount - right.lateCount;
+            } else if (sortBy === "avgWorkHours") {
+                comparison = Number(left._totalDurationMinutes) - Number(right._totalDurationMinutes);
+            } else if (sortBy === "overtimeDays") {
+                comparison = left.overtimeDays - right.overtimeDays;
+            } else if (sortBy === "missingExits") {
+                comparison = left.missingExits - right.missingExits;
+            } else if (sortBy === "department") {
+                comparison = String(left.department ?? "").localeCompare(String(right.department ?? ""));
+            } else {
+                comparison = String(left.name ?? "").localeCompare(String(right.name ?? ""));
+            }
+
+            return comparison === 0 ? 0 : comparison * sortOrder;
+        });
+
+        const page = Number(query.page ?? 1);
+        const pageSize = Number(query.pageSize ?? 25);
+        const total = rows.length;
+        const totalPages = Math.ceil(total / pageSize);
+        const paginated = rows.slice((page - 1) * pageSize, (page - 1) * pageSize + pageSize).map(({ _totalDurationMinutes, ...rest }) => rest);
+
+        return {
+            rows: paginated,
+            pagination: { page, pageSize, total, totalPages },
+            totals: {
+                totalDurationMinutes: rows.reduce((sum, row) => sum + Number(row._totalDurationMinutes ?? 0), 0),
+                lateCount: rows.reduce((sum, row) => sum + Number(row.lateCount ?? 0), 0),
+                missingExits: rows.reduce((sum, row) => sum + Number(row.missingExits ?? 0), 0),
+                overtimeDays: rows.reduce((sum, row) => sum + Number(row.overtimeDays ?? 0), 0),
+            },
+        };
+    }
+
     private isLateEntry(entryAt: number, timezone: string = "Asia/Kolkata"): boolean {
         const entry = DateTime.fromMillis(entryAt).setZone(timezone);
         const msSinceStartOfDay = entry.diff(entry.startOf("day")).as("milliseconds");
@@ -2131,64 +2357,155 @@ export default class AttendanceService {
             rows = [];
         } else {
             const timelineRows: Record<string, any>[] = [];
-            const timelineDate = rowsQuery.date ?? todayDate();
 
-            for (const empId of timelineEmployeeIds) {
-                try {
-                    const timeline = await this.getReportEmployeeTimeline(empId, { date: timelineDate, timezone });
-
-                    logger.info(`Building timeline for employee ${empId}, found ${timeline.events?.length ?? 0} events`);
-                    const emp = timeline.employee;
-                    const parentRow: any = exportRows.find((row: any) => String(row.employeeId) === String(empId)) ?? {};
-
-                    timelineRows.push({
-                        "Row Type": "EMPLOYEE",
-                        "Employee Id": convertIdToEmpId(emp.employeeId) ?? "",
-                        "Name": emp.name ?? "",
-                        "Department": emp.department ?? "",
-                        "Entry Time": formatTime(parentRow.entryTime) ?? "",
-                        "Exit Time": parentRow.exitTime ? formatTime(parentRow.exitTime)  : "--",
-                        "Last Seen At": formatTime(parentRow.lastSeenAt) ?? "",
-                        "Work Hours": parentRow.workHours ?? "",
-                        "Status": parentRow.status ?? "",
-                        "Current Status": parentRow.currentStatus ?? "",
-                        "Late Status": parentRow.lateStatus ? "Yes" : "No",
-                        "Missing Exit": parentRow.missingExit ? "Yes" : "No",
-                        "Event Id": "",
-                        "Event Type": "",
-                        "Event Name": "",
-                        "Time": "",
-                        "Camera": "",
-                        "Confidence": "",
-                        "Event Status": "",
-                    });
-
-                    const evts = timeline.events ?? [];
-                    for (const e of evts) {
-                        timelineRows.push({
-                            "Row Type": "EVENT",
-                            "Employee Id": convertIdToEmpId(emp.employeeId) ?? "",
-                            "Name": "",
-                            "Department": "",
-                            "Entry Time": "",
-                            "Exit Time": "",
-                            "Last Seen At": "",
-                            "Work Hours": "",
-                            "Status": "",
-                            "Current Status": "",
-                            "Late Status": "",
-                            "Missing Exit": "",
-                            "Event Id": e.id ?? "",
-                            "Event Type": e.type ?? "",
-                            "Event Name": e.eventName ?? "",
-                            "Time": formatTime(e.timestamp, { showSeconds: true }),
-                            "Camera": e.cameraSource ?? "",
-                            "Confidence": e.confidence ?? "",
-                            "Event Status": e.statusBadge ?? "",
-                        });
+            if (mode === "monthly") {
+                // Monthly mode: loop through each day of the month and fetch timeline per day per employee
+                const month = rowsQuery.month ?? DateTime.now().setZone(timezone).toFormat("yyyy-MM");
+                const { monthStartDate, monthEndDate } = this.getMonthBounds(month, timezone);
+                
+                const startDt = DateTime.fromISO(monthStartDate, { zone: timezone });
+                const endDt = DateTime.fromISO(monthEndDate, { zone: timezone });
+                
+                let currentDt = startDt;
+                while (currentDt <= endDt) {
+                    const dateStr = currentDt.toFormat("yyyy-MM-dd");
+                    
+                    for (const empId of timelineEmployeeIds) {
+                        try {
+                            const timeline = await this.getReportEmployeeTimeline(empId, { date: dateStr, timezone });
+                            
+                            logger.info(`Building monthly timeline for employee ${empId} on ${dateStr}, found ${timeline.events?.length ?? 0} events`);
+                            const emp = timeline.employee;
+                            const timelineAny = timeline as any;
+                            const computed = timelineAny.computed ?? {};
+                            const events = Array.isArray(timelineAny.events) ? timelineAny.events : [];
+                            const firstEvent = events[0] ?? null;
+                            const lastEvent = events.length > 0 ? events[events.length - 1] : null;
+                            const firstEntryAt = computed.firstEntryAt ?? firstEvent?.timestamp ?? null;
+                            const lastExitAt = computed.lastExitAt ?? null;
+                            const lastSeenAt = lastEvent?.timestamp ?? lastExitAt ?? firstEntryAt ?? null;
+                            const totalDurationMinutes = Number(computed.totalDurationMinutes ?? 0);
+                            const workHours = totalDurationMinutes > 0 ? this.formatMinutesToHoursMinutes(totalDurationMinutes) : "--";
+                            const sessionStatus = computed.sessionStatus ?? (events.length > 0 ? "COMPLETED" : "ABSENT");
+                            const currentStatus = sessionStatus === "ONGOING" ? "In" : sessionStatus === "COMPLETED" ? "Out" : "--";
+                            const lateStatus = Array.isArray(computed.flags) && computed.flags.includes("LATE_ENTRY") ? "Yes" : "No";
+                            const missingExit = Array.isArray(computed.flags) && computed.flags.includes("MISSING_EXIT") ? "Yes" : "No";
+                            
+                            // Push employee header for this day
+                            timelineRows.push({
+                                "Row Type": "EMPLOYEE",
+                                "Employee Id": convertIdToEmpId(emp.employeeId) ?? "",
+                                "Name": emp.name ?? "--",
+                                "Department": emp.department ?? "--",
+                                "Entry Time": firstEntryAt ? formatTime(firstEntryAt) : "--",
+                                "Exit Time": lastExitAt ? formatTime(lastExitAt) : "--",
+                                "Last Seen At": lastSeenAt ? formatTime(lastSeenAt) : "--",
+                                "Work Hours": workHours,
+                                "Status": `${dateStr}`,
+                                "Current Status": currentStatus,
+                                "Late Status": lateStatus,
+                                "Missing Exit": missingExit,
+                                "Event Id": "",
+                                "Event Type": "",
+                                "Event Name": "",
+                                "Time": "",
+                                "Camera": "",
+                                "Confidence": "",
+                                "Event Status": "",
+                            });
+                            
+                            const evts = timeline.events ?? [];
+                            for (const e of evts) {
+                                timelineRows.push({
+                                    "Row Type": "EVENT",
+                                    "Employee Id": convertIdToEmpId(emp.employeeId) ?? "",
+                                    "Name": "",
+                                    "Department": "",
+                                    "Entry Time": "",
+                                    "Exit Time": "",
+                                    "Last Seen At": "",
+                                    "Work Hours": "",
+                                    "Status": "",
+                                    "Current Status": "",
+                                    "Late Status": "",
+                                    "Missing Exit": "",
+                                    "Event Id": e.id ?? "",
+                                    "Event Type": e.type ?? "",
+                                    "Event Name": e.eventName ?? "",
+                                    "Time": formatTime(e.timestamp, { showSeconds: true }),
+                                    "Camera": e.cameraSource ?? "",
+                                    "Confidence": e.confidence ?? "",
+                                    "Event Status": e.statusBadge ?? "",
+                                });
+                            }
+                        } catch (err) {
+                            logger.error({ empId, dateStr, err: String(err) }, "Error building monthly timeline for employee on date");
+                        }
                     }
-                } catch (err) {
-                    logger.error({ empId, err: String(err) }, "Error building timeline for employee");
+                    
+                    currentDt = currentDt.plus({ days: 1 });
+                }
+            } else {
+                // Daily or custom range mode: single date timeline
+                const timelineDate = rowsQuery.date ?? todayDate();
+                
+                for (const empId of timelineEmployeeIds) {
+                    try {
+                        const timeline = await this.getReportEmployeeTimeline(empId, { date: timelineDate, timezone });
+
+                        logger.info(`Building timeline for employee ${empId}, found ${timeline.events?.length ?? 0} events`);
+                        const emp = timeline.employee;
+                        const parentRow: any = exportRows.find((row: any) => String(row.employeeId) === String(empId)) ?? {};
+
+                        timelineRows.push({
+                            "Row Type": "EMPLOYEE",
+                            "Employee Id": convertIdToEmpId(emp.employeeId) ?? "",
+                            "Name": emp.name ?? "",
+                            "Department": emp.department ?? "",
+                            "Entry Time": formatTime(parentRow.entryTime) ?? "",
+                            "Exit Time": parentRow.exitTime ? formatTime(parentRow.exitTime)  : "--",
+                            "Last Seen At": formatTime(parentRow.lastSeenAt) ?? "",
+                            "Work Hours": parentRow.workHours ?? "",
+                            "Status": parentRow.status ?? "",
+                            "Current Status": parentRow.currentStatus ?? "",
+                            "Late Status": parentRow.lateStatus ? "Yes" : "No",
+                            "Missing Exit": parentRow.missingExit ? "Yes" : "No",
+                            "Event Id": "",
+                            "Event Type": "",
+                            "Event Name": "",
+                            "Time": "",
+                            "Camera": "",
+                            "Confidence": "",
+                            "Event Status": "",
+                        });
+
+                        const evts = timeline.events ?? [];
+                        for (const e of evts) {
+                            timelineRows.push({
+                                "Row Type": "EVENT",
+                                "Employee Id": convertIdToEmpId(emp.employeeId) ?? "",
+                                "Name": "",
+                                "Department": "",
+                                "Entry Time": "",
+                                "Exit Time": "",
+                                "Last Seen At": "",
+                                "Work Hours": "",
+                                "Status": "",
+                                "Current Status": "",
+                                "Late Status": "",
+                                "Missing Exit": "",
+                                "Event Id": e.id ?? "",
+                                "Event Type": e.type ?? "",
+                                "Event Name": e.eventName ?? "",
+                                "Time": formatTime(e.timestamp, { showSeconds: true }),
+                                "Camera": e.cameraSource ?? "",
+                                "Confidence": e.confidence ?? "",
+                                "Event Status": e.statusBadge ?? "",
+                            });
+                        }
+                    } catch (err) {
+                        logger.error({ empId, err: String(err) }, "Error building timeline for employee");
+                    }
                 }
             }
 

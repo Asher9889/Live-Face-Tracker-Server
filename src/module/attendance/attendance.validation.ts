@@ -113,14 +113,33 @@ const reportsBaseFilters = z.object({
     timezone: timezoneSchema,
 });
 
-export const reportsSummaryQuerySchema = reportsBaseFilters.extend({});
-
 export const reportsRowsQuerySchema = reportsBaseFilters.extend({
     page: z.coerce.number().int().min(1).default(1),
     pageSize: z.coerce.number().int().min(1).max(200).default(25),
     sortBy: z.string().optional(),
     sortOrder: z.enum(["asc", "desc"]).optional().default("asc"),
-    
+}).superRefine((value, ctx) => {
+    if (value.mode === "monthly" && !value.month) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["month"], message: "month is required for monthly mode" });
+    }
+    if (value.mode === "daily" && !value.date) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["date"], message: "date is required for daily mode" });
+    }
+    if (value.mode === "custom" && (!value.startDate || !value.endDate)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["startDate", "endDate"], message: "startDate and endDate are required for custom mode" });
+    }
+});
+
+export const reportsSummaryQuerySchema = reportsBaseFilters.superRefine((value, ctx) => {
+    if (value.mode === "monthly" && !value.month) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["month"], message: "month is required for monthly mode" });
+    }
+    if (value.mode === "daily" && !value.date) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["date"], message: "date is required for daily mode" });
+    }
+    if (value.mode === "custom" && (!value.startDate || !value.endDate)) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["startDate", "endDate"], message: "startDate and endDate are required for custom mode" });
+    }
 });
 
 export const reportsExportBodySchema = z.object({
