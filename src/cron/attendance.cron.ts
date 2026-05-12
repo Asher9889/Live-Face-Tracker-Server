@@ -25,7 +25,8 @@ export default function startAttendanceCron() {
             console.log(`[CRON] Found ${openSessions.length} open sessions`);
 
             for (const session of openSessions) {
-                const exitTime = session.lastSeenAt ?? session.entryAt;
+                let exitTime = session.lastSeenAt ?? session.entryAt;
+                exitTime += 2 * 1000; // add 2 second buffer to lastSeenAt or entryAt
 
                 if (typeof exitTime !== "number") {
                     console.warn("[CRON] Skipping session without lastSeenAt", session._id);

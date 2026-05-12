@@ -15,7 +15,7 @@ import {
     AttendanceEventsQueryDTO,
     AttendenceQueryDTO
 } from "./attendance.types";
-import { todayDate } from "../../utils";
+import { logger, todayDate } from "../../utils";
 import { ObjectId } from "mongodb";
 import mongoose, { PipelineStage } from "mongoose";
 import { envConfig } from "../../config";
@@ -411,7 +411,7 @@ export default class AttendanceService {
         };
     }
 
-    async getReportsRows(query: any) {
+     getReportsRows = async(query: any) => {
         const mode = query.mode;
         const timezone = query?.timezone ?? "Asia/Kolkata";
         const today = todayDate();
@@ -438,14 +438,17 @@ export default class AttendanceService {
         if (query.employeeId) Object.assign(match, this.getEmployeeIdQuery(query.employeeId));
 
         if (query.department) {
-            const deptEmployees = await EmployeeModel.find({ department: query.department }, { id: 1, _id: 1 }).lean();
-            const ids = deptEmployees.map((e: any) => e.id).filter(Boolean);
-            const objIds = deptEmployees.map((e: any) => e._id?.toString?.()).filter(Boolean);
-            const combined = [...ids, ...objIds];
-            if (combined.length === 0) {
+            const deptEmployees = await EmployeeModel.find({ department: {$regex: query.department, $options: "i"} }, { _id: 1 }).lean();
+
+            logger.info("Department employees for query:", query.department, deptEmployees.length);
+            // const ids = deptEmployees.map((e: any) => e._id).filter(Boolean);
+            const objIds = deptEmployees.map((e: any) => e._id).filter(Boolean);
+            // const combined = [...objIds];
+            if (objIds.length === 0) {
                 return { mode, rows: [], pagination: { page: query.page ?? 1, pageSize: query.pageSize ?? 25, total: 0, totalPages: 0 } };
             }
-            match.$or = [{ employeeId: { $in: combined } }];
+            logger.info("Combined employee IDs for department filter:", query.department, objIds.length);
+            match.employeeId = { $in: objIds };
         }
 
         // aggregate per employee
@@ -1700,7 +1703,7 @@ export default class AttendanceService {
             return {
                 $or: [
                     { employeeId },
-                    { employeeId: new ObjectId(employeeId) }
+                    { employeeId: new ObjectId(employeeId) } // this will used in db.
                 ],
             };
         }

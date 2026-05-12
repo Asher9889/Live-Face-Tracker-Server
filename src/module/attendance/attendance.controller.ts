@@ -134,7 +134,7 @@ export default class AttendanceController {
         try {
             const query = req.validatedQuery;
             if (!query) throw new ApiError(StatusCodes.BAD_REQUEST, "Query params are required", [{ field: "query", message: "Query params are required" }]);
-            const data = await (attendanceService as any).getReportsRows(query);
+            const data = await attendanceService.getReportsRows(query);
             return ApiResponse.success(res, "Reports rows fetched successfully", data, StatusCodes.OK);
         } catch (error) {
             throw error;

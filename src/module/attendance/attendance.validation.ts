@@ -120,6 +120,7 @@ export const reportsRowsQuerySchema = reportsBaseFilters.extend({
     pageSize: z.coerce.number().int().min(1).max(200).default(25),
     sortBy: z.string().optional(),
     sortOrder: z.enum(["asc", "desc"]).optional().default("asc"),
+    
 });
 
 export const reportsExportBodySchema = z.object({
