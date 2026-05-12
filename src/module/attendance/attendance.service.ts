@@ -2018,6 +2018,273 @@ export default class AttendanceService {
         return normalizedValue.includes(normalizedFilter);
     }
 
+    // Helper: Check if logs contain any EXIT-type event
+    private hasExitEvent(logs: any[]): boolean {
+        const exitEventTypes = [
+            "EXIT_DETECTED",
+            "EXIT_PENDING",
+            "PENDING_EXIT",
+            "EXIT_CANCELLED",
+            "AUTO_EXIT_TIMEOUT",
+            "SYSTEM_RECOVERY",
+            "MANUAL_CORRECTION",
+        ];
+        return logs.some((log) => exitEventTypes.includes(log.eventType));
+    }
+
+    // Helper: Check if first event is late (after office start time)
+    private isFirstEventLate(firstEventMs: number, timezone: string): boolean {
+        return this.isLateArrival(firstEventMs, timezone);
+    }
+
+    // Optimized: Fetch all month's logs in ONE query
+    private async fetchMonthlyPresenceLogs( employeeIds: string[], monthStartDate: string,
+        monthEndDate: string,
+        timezone: string
+    ) {
+        const { dayStartMs } = this.getDayBounds(monthStartDate, timezone);
+        const { dayEndMs } = this.getDayBounds(monthEndDate, timezone);
+
+        if (employeeIds.length === 0) return [];
+
+        const logs = await PresenceLogModel.find({
+            employeeId: { $in: employeeIds },
+            occurredAt: { $gte: dayStartMs, $lte: dayEndMs },
+            eventType: {
+                $in: [
+                    "ENTRY_DETECTED",
+                    "FACE_DETECTED",
+                    "EXIT_DETECTED",
+                    "PENDING_EXIT",
+                    "EXIT_PENDING",
+                    "EXIT_CANCELLED",
+                    "AUTO_EXIT_TIMEOUT",
+                    "SYSTEM_RECOVERY",
+                    "MANUAL_CORRECTION",
+                ],
+            },
+        })
+            .sort({ employeeId: 1, occurredAt: 1 })
+            .lean();
+
+        return logs;
+    }
+
+    // Optimized: Deduplicate logs in Node.js (same camera + time < 2 min)
+    private deduplicateMovementLogs(logs: any[]): any[] {
+        if (logs.length === 0) return [];
+
+        const deduped: any[] = [];
+        let prevLog: any = null;
+
+        for (const log of logs) {
+            if (!prevLog) {
+                deduped.push(log);
+                prevLog = log;
+                continue;
+            }
+
+            // Check if same employee
+            if (String(log.employeeId) !== String(prevLog.employeeId)) {
+                deduped.push(log);
+                prevLog = log;
+                continue;
+            }
+
+            // Check if same camera AND within 2 minutes
+            const timeDiffMs = Math.abs(Number(log.occurredAt) - Number(prevLog.occurredAt));
+            if (log.cameraCode === prevLog.cameraCode && timeDiffMs < 2 * 60 * 1000) {
+                // Skip duplicate
+                logger.debug(
+                    `Skipping duplicate event for ${log.employeeId} at camera ${log.cameraCode}, diff: ${timeDiffMs}ms`
+                );
+                continue;
+            }
+
+            deduped.push(log);
+            prevLog = log;
+        }
+
+        return deduped;
+    }
+
+    // Optimized: Group deduped logs by employee and date
+    private groupMovementLogsByEmployeeAndDate(logs: any[], timezone: string) {
+        const groupedData = new Map<string, Map<string, any[]>>();
+
+        for (const log of logs) {
+            const empId = String(log.employeeId);
+            const dateStr = this.toAttendenceDate(Number(log.occurredAt), timezone);
+
+            if (!groupedData.has(empId)) {
+                groupedData.set(empId, new Map());
+            }
+
+            const employeeData = groupedData.get(empId)!;
+            if (!employeeData.has(dateStr)) {
+                employeeData.set(dateStr, []);
+            }
+
+            employeeData.get(dateStr)!.push(log);
+        }
+
+        return groupedData;
+    }
+
+    // Optimized: Build timeline rows for monthly export (single DB query)
+    private async buildMonthlyTimelineRowsOptimized(
+        timelineEmployeeIds: string[],
+        monthStartDate: string,
+        monthEndDate: string,
+        timezone: string
+    ) {
+        const timelineRows: Record<string, any>[] = [];
+
+        if (timelineEmployeeIds.length === 0) return timelineRows;
+
+        // SINGLE DB QUERY: Fetch all logs for month
+        logger.info(
+            `Fetching monthly presence logs for ${timelineEmployeeIds.length} employees from ${monthStartDate} to ${monthEndDate}`
+        );
+        const allLogs = await this.fetchMonthlyPresenceLogs(
+            timelineEmployeeIds,
+            monthStartDate,
+            monthEndDate,
+            timezone
+        );
+        logger.info(`Fetched ${allLogs.length} raw logs from DB`);
+
+        // Deduplicate in Node.js
+        const dedupedLogs = this.deduplicateMovementLogs(allLogs);
+        logger.info(`After deduplication: ${dedupedLogs.length} logs`);
+
+        // Group by employee and date
+        const groupedByEmpDate = this.groupMovementLogsByEmployeeAndDate(dedupedLogs, timezone);
+
+        // Get camera map once
+        const cameraCodes = [...new Set(dedupedLogs.map((log: any) => log.cameraCode).filter(Boolean))];
+        const cameraMap = await this.getCameraMap(cameraCodes);
+
+        // Get employee data once
+        const objectIdKeys = timelineEmployeeIds
+            .filter((id) => ObjectId.isValid(id))
+            .map((id) => new ObjectId(id));
+        const employees = timelineEmployeeIds.length > 0
+            ? await EmployeeModel.find(
+                {
+                    $or: [{ _id: { $in: objectIdKeys } }, { id: { $in: timelineEmployeeIds } }],
+                },
+                { meanEmbedding: 0, embeddings: 0 }
+            ).lean()
+            : [];
+        const empMap = new Map<string, any>();
+        for (const emp of employees) {
+            if (emp.id) empMap.set(String(emp.id), emp);
+            if (emp._id) empMap.set(String(emp._id), emp);
+        }
+
+        // Build rows: iterate employees, then dates per employee
+        for (const empId of timelineEmployeeIds) {
+            const employeeData = groupedByEmpDate.get(String(empId));
+            if (!employeeData) continue;
+
+            const emp = empMap.get(String(empId));
+
+            // Sort dates for consistent order
+            const sortedDates = Array.from(employeeData.keys()).sort();
+
+            for (const dateStr of sortedDates) {
+                const dayLogs = employeeData.get(dateStr) || [];
+                if (dayLogs.length === 0) continue;
+
+                // Compute daily summary
+                const firstLog = dayLogs[0];
+                const lastLog = dayLogs[dayLogs.length - 1];
+                const firstSeenAt = formatTime(Number(firstLog.occurredAt)); // No seconds for summary
+                const lastSeenAt = formatTime(Number(lastLog.occurredAt)); // No seconds for summary
+                const totalEvents = dayLogs.length;
+
+                // Calculate work hours: duration from first event to last event
+                const firstEventMs = Number(firstLog.occurredAt);
+                const lastEventMs = Number(lastLog.occurredAt);
+                const workDurationMs = Math.max(0, lastEventMs - firstEventMs);
+                const workHours = this.formatMinutesToHoursMinutes(workDurationMs / 60000);
+
+                // Determine late status: if first event is after office start time
+                const isLate = this.isFirstEventLate(firstEventMs, timezone);
+                const lateStatus = isLate ? "Yes" : "No";
+
+                // Determine missing exit: if no EXIT-type event found
+                const hasExit = this.hasExitEvent(dayLogs);
+                const missingExit = !hasExit ? "Yes" : "No";
+
+                // Employee header row for this day
+                timelineRows.push({
+                    "Row Type": "EMPLOYEE",
+                    "Employee Id": convertIdToEmpId(emp?.id ?? empId) ?? "",
+                    "Name": emp?.name ?? "--",
+                    "Department": emp?.department ?? "--",
+                    "Entry Time": firstSeenAt,
+                    "Exit Time": lastSeenAt,
+                    "Last Seen At": lastSeenAt,
+                    "Work Hours": workHours,
+                    "Status": `${dateStr}`,
+                    "Current Status": "--",
+                    "Late Status": lateStatus,
+                    "Missing Exit": missingExit,
+                    "Event Id": "",
+                    "Event Type": "",
+                    "Event Name": "",
+                    "Time": "",
+                    "Camera": "",
+                    "Confidence": "",
+                    "Event Status": "",
+                });
+
+                // Event rows for this day
+                for (const log of dayLogs) {
+                    const camera = cameraMap.get(log.cameraCode ?? "");
+                    const eventType = log.eventType;
+                    // Determine if event is EXIT or ENTRY type
+                    const exitEventTypes = [
+                        "EXIT_DETECTED",
+                        "EXIT_PENDING",
+                        "PENDING_EXIT",
+                        "EXIT_CANCELLED",
+                        "AUTO_EXIT_TIMEOUT",
+                        "SYSTEM_RECOVERY",
+                        "MANUAL_CORRECTION",
+                    ];
+                    const type = exitEventTypes.includes(eventType) ? "EXIT" : "ENTRY";
+
+                    timelineRows.push({
+                        "Row Type": "EVENT",
+                        "Employee Id": convertIdToEmpId(emp?.id ?? empId) ?? "",
+                        "Name": "",
+                        "Department": "",
+                        "Entry Time": "",
+                        "Exit Time": "",
+                        "Last Seen At": "",
+                        "Work Hours": "",
+                        "Status": "",
+                        "Current Status": "",
+                        "Late Status": "",
+                        "Missing Exit": "",
+                        "Event Id": log._id?.toString?.() ?? "",
+                        "Event Type": type,
+                        "Event Name": eventType,
+                        "Time": formatTime(Number(log.occurredAt), { showSeconds: true }), // With seconds for events
+                        "Camera": camera?.name ?? (log.cameraCode ?? ""),
+                        "Confidence": typeof log.confidence === "number" ? log.confidence.toFixed(2) : "",
+                        "Event Status": "success",
+                    });
+                }
+            }
+        }
+
+        return timelineRows;
+    }
+
     private buildEmployeeMatchQuery(query: any) {
         const andConditions: Record<string, any>[] = [];
 
@@ -2359,92 +2626,18 @@ export default class AttendanceService {
             const timelineRows: Record<string, any>[] = [];
 
             if (mode === "monthly") {
-                // Monthly mode: loop through each day of the month and fetch timeline per day per employee
+                // Optimized monthly mode: SINGLE DB query for all month's logs
                 const month = rowsQuery.month ?? DateTime.now().setZone(timezone).toFormat("yyyy-MM");
                 const { monthStartDate, monthEndDate } = this.getMonthBounds(month, timezone);
-                
-                const startDt = DateTime.fromISO(monthStartDate, { zone: timezone });
-                const endDt = DateTime.fromISO(monthEndDate, { zone: timezone });
-                
-                let currentDt = startDt;
-                while (currentDt <= endDt) {
-                    const dateStr = currentDt.toFormat("yyyy-MM-dd");
-                    
-                    for (const empId of timelineEmployeeIds) {
-                        try {
-                            const timeline = await this.getReportEmployeeTimeline(empId, { date: dateStr, timezone });
-                            
-                            logger.info(`Building monthly timeline for employee ${empId} on ${dateStr}, found ${timeline.events?.length ?? 0} events`);
-                            const emp = timeline.employee;
-                            const timelineAny = timeline as any;
-                            const computed = timelineAny.computed ?? {};
-                            const events = Array.isArray(timelineAny.events) ? timelineAny.events : [];
-                            const firstEvent = events[0] ?? null;
-                            const lastEvent = events.length > 0 ? events[events.length - 1] : null;
-                            const firstEntryAt = computed.firstEntryAt ?? firstEvent?.timestamp ?? null;
-                            const lastExitAt = computed.lastExitAt ?? null;
-                            const lastSeenAt = lastEvent?.timestamp ?? lastExitAt ?? firstEntryAt ?? null;
-                            const totalDurationMinutes = Number(computed.totalDurationMinutes ?? 0);
-                            const workHours = totalDurationMinutes > 0 ? this.formatMinutesToHoursMinutes(totalDurationMinutes) : "--";
-                            const sessionStatus = computed.sessionStatus ?? (events.length > 0 ? "COMPLETED" : "ABSENT");
-                            const currentStatus = sessionStatus === "ONGOING" ? "In" : sessionStatus === "COMPLETED" ? "Out" : "--";
-                            const lateStatus = Array.isArray(computed.flags) && computed.flags.includes("LATE_ENTRY") ? "Yes" : "No";
-                            const missingExit = Array.isArray(computed.flags) && computed.flags.includes("MISSING_EXIT") ? "Yes" : "No";
-                            
-                            // Push employee header for this day
-                            timelineRows.push({
-                                "Row Type": "EMPLOYEE",
-                                "Employee Id": convertIdToEmpId(emp.employeeId) ?? "",
-                                "Name": emp.name ?? "--",
-                                "Department": emp.department ?? "--",
-                                "Entry Time": firstEntryAt ? formatTime(firstEntryAt) : "--",
-                                "Exit Time": lastExitAt ? formatTime(lastExitAt) : "--",
-                                "Last Seen At": lastSeenAt ? formatTime(lastSeenAt) : "--",
-                                "Work Hours": workHours,
-                                "Status": `${dateStr}`,
-                                "Current Status": currentStatus,
-                                "Late Status": lateStatus,
-                                "Missing Exit": missingExit,
-                                "Event Id": "",
-                                "Event Type": "",
-                                "Event Name": "",
-                                "Time": "",
-                                "Camera": "",
-                                "Confidence": "",
-                                "Event Status": "",
-                            });
-                            
-                            const evts = timeline.events ?? [];
-                            for (const e of evts) {
-                                timelineRows.push({
-                                    "Row Type": "EVENT",
-                                    "Employee Id": convertIdToEmpId(emp.employeeId) ?? "",
-                                    "Name": "",
-                                    "Department": "",
-                                    "Entry Time": "",
-                                    "Exit Time": "",
-                                    "Last Seen At": "",
-                                    "Work Hours": "",
-                                    "Status": "",
-                                    "Current Status": "",
-                                    "Late Status": "",
-                                    "Missing Exit": "",
-                                    "Event Id": e.id ?? "",
-                                    "Event Type": e.type ?? "",
-                                    "Event Name": e.eventName ?? "",
-                                    "Time": formatTime(e.timestamp, { showSeconds: true }),
-                                    "Camera": e.cameraSource ?? "",
-                                    "Confidence": e.confidence ?? "",
-                                    "Event Status": e.statusBadge ?? "",
-                                });
-                            }
-                        } catch (err) {
-                            logger.error({ empId, dateStr, err: String(err) }, "Error building monthly timeline for employee on date");
-                        }
-                    }
-                    
-                    currentDt = currentDt.plus({ days: 1 });
-                }
+
+                const monthTimelineRows = await this.buildMonthlyTimelineRowsOptimized(
+                    timelineEmployeeIds,
+                    monthStartDate,
+                    monthEndDate,
+                    timezone
+                );
+
+                timelineRows.push(...monthTimelineRows);
             } else {
                 // Daily or custom range mode: single date timeline
                 const timelineDate = rowsQuery.date ?? todayDate();
