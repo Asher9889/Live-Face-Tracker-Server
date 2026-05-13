@@ -15,14 +15,14 @@ const presenceWorker = new Worker("presence", async (job) => {
 
         let { employeeId, exitTs } = job.data;
 
-        exitTs = Number(exitTs);
+        exitTs = Number(exitTs) + 1000; // for correct log order
 
         const presence = await PresenceModel.findOne({ employeeId, state: { $in: ["EXIT_PENDING", "PENDING_EXIT"] }, pendingExitAt: exitTs, }).lean();
 
         if (!presence) {
             logger.info(`[CONFIRM EXIT] No presence record found for employee: ${employeeId}`);
             return;
-        };
+        }; 
 
         await PresenceModel.updateOne(
             { employeeId, state: { $in: ["EXIT_PENDING", "PENDING_EXIT"] }, pendingExitAt: exitTs },
@@ -34,14 +34,14 @@ const presenceWorker = new Worker("presence", async (job) => {
                     lastGate: "EXIT",
                     lastCameraCode: presence.lastCameraCode,
                     confidence: presence.confidence,
-                    pendingExitAt: null,
-                },
+                    pendingExitAt: null, 
+                }, 
             }
         );
 
         await attendanceService.endSession({
             employeeId,
-            exitAt: exitTs,
+            exitAt: exitTs, // add 1 second to ensure this log is after the entry log in case of quick exit
             exitSource: "EXIT_CAMERA",
             exitCameraCode: presence.lastCameraCode,
             exitConfidence: presence.confidence,
@@ -51,10 +51,10 @@ const presenceWorker = new Worker("presence", async (job) => {
             employeeId,
             eventType: "EXIT_CONFIRMED",
             fromState: "EXIT_PENDING",
-            toState: "OUT",
+            toState: "OUT", 
             cameraCode: presence.lastCameraCode,
-            occurredAt: exitTs,
-            date: miliSecondsToISoDate(exitTs),
+            occurredAt: exitTs, // add 1 second to ensure this log is after the entry log in case of quick exit
+            date: miliSecondsToISoDate(exitTs), 
             source: "face_recognition",
             confidence: presence.confidence,
         });

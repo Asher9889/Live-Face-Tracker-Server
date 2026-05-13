@@ -223,7 +223,7 @@ export default class PresenceService {
                 fromState: presence.state as PresenceState,
                 toState: "EXIT_PENDING",
                 cameraCode,
-                occurredAt: eventTs,
+                occurredAt: eventTs, // add 1 second to ensure this log is after the entry log in case of quick exit
                 date: miliSecondsToISoDate(eventTs),
                 source: "face_recognition",
                 confidence,
