@@ -105,117 +105,137 @@ export default class AttendanceService {
         const { date, timezone } = query;
         const { dayStartMs, dayEndMs } = this.getDayBounds(date, timezone);
 
-        // const logs = await PresenceLogModel.find({
-        //     employeeId,
-        //     eventType: { $in: ["ENTRY_DETECTED", "FACE_DETECTED", "EXIT_DETECTED", "PENDING_EXIT", "EXIT_PENDING", "EXIT_CANCELLED", "AUTO_EXIT_TIMEOUT", "SYSTEM_RECOVERY", "MANUAL_CORRECTION"] },
-        //     occurredAt: { $gte: dayStartMs, $lte: dayEndMs },
-        // }).sort({ occurredAt: 1 }).hint({ employeeId: 1, eventType: 1, occurredAt: 1 }).lean();
+        logger.info(`Fetching attendance logs for employee ${employeeId} on ${date} (${dayStartMs} - ${dayEndMs}) in timezone ${timezone}`);
+        const logs = await PresenceLogModel.find({
+            employeeId,
+            eventType: { $in: ["ENTRY_DETECTED", "FACE_DETECTED", "EXIT_DETECTED", "PENDING_EXIT", "EXIT_PENDING", "EXIT_CONFIRMED", "EXIT_CANCELLED", "AUTO_EXIT_TIMEOUT", "SYSTEM_RECOVERY", "MANUAL_CORRECTION"] },
+            occurredAt: { $gte: dayStartMs, $lte: dayEndMs },
+        }).sort({ occurredAt: 1 }).hint({ employeeId: 1, eventType: 1, occurredAt: 1 }).lean();
 
-        const logs = await PresenceLogModel.aggregate([
-            {
-                $match: {
-                    employeeId,
-                    eventType: {
-                        $in: [
-                            "ENTRY_DETECTED",
-                            "FACE_DETECTED",
-                            "EXIT_DETECTED",
-                            "PENDING_EXIT",
-                            "EXIT_PENDING",
-                            "EXIT_CANCELLED",
-                            "AUTO_EXIT_TIMEOUT",
-                            "SYSTEM_RECOVERY",
-                            "MANUAL_CORRECTION",
-                        ],
-                    },
-                    occurredAt: {
-                        $gte: dayStartMs,
-                        $lte: dayEndMs,
-                    },
-                },
-            },
+        const filteredLogs = [];
+        let previous = null;
 
-            // Important for window functions
-            {
-                $sort: {
-                    occurredAt: 1,
-                },
-            },
+        for (const log of logs) {
 
-            {
-                $setWindowFields: {
-                    sortBy: { occurredAt: 1 },
-                    output: {
-                        prevOccurredAt: {
-                            $shift: {
-                                output: "$occurredAt",
-                                by: -1,
-                            },
-                        },
-                        prevCameraCode: {
-                            $shift: {
-                                output: "$cameraCode",
-                                by: -1,
-                            },
-                        },
-                    },
-                },
-            },
+            const sameCamera = previous?.cameraCode === log.cameraCode;
+            const sameEventType = previous?.eventType === log.eventType;
 
-            {
-                $addFields: {
-                    diffMs: {
-                        $subtract: ["$occurredAt", "$prevOccurredAt"],
-                    },
+            const within2Minutes = previous && 
+            (log.occurredAt - previous.occurredAt) < 2 * 60 * 1000;
 
-                    shouldSkip: {
-                        $and: [
-                            {
-                                $eq: ["$cameraCode", "$prevCameraCode"],
-                            },
-                            {
-                                $lt: [
-                                    {
-                                        $subtract: ["$occurredAt", "$prevOccurredAt"],
-                                    },
-                                    2 * 60 * 1000,
-                                ],
-                            },
-                        ],
-                    },
-                },
-            },
+            if (sameCamera && within2Minutes && sameEventType) {
+                continue;
+            }
 
-            {
-                $match: {
-                    shouldSkip: {
-                        $ne: true,
-                    },
-                },
-            },
+            filteredLogs.push(log);
 
-            {
-                $project: {
-                    prevOccurredAt: 0,
-                    prevCameraCode: 0,
-                    diffMs: 0,
-                    shouldSkip: 0,
-                },
-            },
-        ]);
+            previous = log;
+        }
 
+        // const logs = await PresenceLogModel.aggregate([
+        //     {
+        //         $match: {
+        //             employeeId,
+        //             eventType: {
+        //                 $in: [
+        //                     "ENTRY_DETECTED",
+        //                     "FACE_DETECTED",
+        //                     "EXIT_DETECTED",
+        //                     "PENDING_EXIT",
+        //                     "EXIT_PENDING",
+        //                     "EXIT_CANCELLED",
+        //                     "EXIT_CONFIRMED",
+        //                     "AUTO_EXIT_TIMEOUT",
+        //                     "SYSTEM_RECOVERY",
+        //                     "MANUAL_CORRECTION",
+        //                 ],
+        //             },
+        //             occurredAt: {
+        //                 $gte: dayStartMs,
+        //                 $lte: dayEndMs,
+        //             },
+        //         },
+        //     },
 
+        //     // Important for window functions
+        //     {
+        //         $sort: {
+        //             occurredAt: 1,
+        //         },
+        //     },
 
-        const cameraMap = await this.getCameraMap(logs.map((log: any) => log.cameraCode).filter(Boolean));
+        //     {
+        //         $setWindowFields: {
+        //             sortBy: { occurredAt: 1 },
+        //             output: {
+        //                 prevOccurredAt: {
+        //                     $shift: {
+        //                         output: "$occurredAt",
+        //                         by: -1,
+        //                     },
+        //                 },
+        //                 prevCameraCode: {
+        //                     $shift: {
+        //                         output: "$cameraCode",
+        //                         by: -1,
+        //                     },
+        //                 },
+        //             },
+        //         },
+        //     },
 
-        const events = logs.map((log, index) => {
+        //     {
+        //         $addFields: {
+        //             diffMs: {
+        //                 $subtract: ["$occurredAt", "$prevOccurredAt"],
+        //             },
+
+        //             shouldSkip: {
+        //                 $and: [
+        //                     {
+        //                         $eq: ["$cameraCode", "$prevCameraCode"],
+        //                     },
+        //                     {
+        //                         $lt: [
+        //                             {
+        //                                 $subtract: ["$occurredAt", "$prevOccurredAt"],
+        //                             },
+        //                             2 * 60 * 1000,
+        //                         ],
+        //                     },
+        //                 ],
+        //             },
+        //         },
+        //     },
+
+        //     {
+        //         $match: {
+        //             shouldSkip: {
+        //                 $ne: true,
+        //             },
+        //         },
+        //     },
+
+        //     {
+        //         $project: {
+        //             prevOccurredAt: 0,
+        //             prevCameraCode: 0,
+        //             diffMs: 0,
+        //             shouldSkip: 0,
+        //         },
+        //     },
+        // ]);
+
+        const cameraMap = await this.getCameraMap(filteredLogs.map((log: any) => log.cameraCode).filter(Boolean));
+
+        const events = filteredLogs.map((log, index) => {
             const camera = cameraMap.get(log.cameraCode ?? "");
             const type: TimelineEventType = log.toState === "IN" ? "ENTRY" : "EXIT";
             const eventName = log.eventType
             const timestamp = this.toIsoWithZone(log.occurredAt, timezone);
 
             return {
-                eventId: log._id?.toString?.() ?? `evt_${index + 1}`,
+                eventId: log._id.toString(),
                 timestamp,
                 eventName: log.eventType,
                 type,
@@ -2038,7 +2058,7 @@ export default class AttendanceService {
     }
 
     // Optimized: Fetch all month's logs in ONE query
-    private async fetchMonthlyPresenceLogs( employeeIds: string[], monthStartDate: string,
+    private async fetchMonthlyPresenceLogs(employeeIds: string[], monthStartDate: string,
         monthEndDate: string,
         timezone: string
     ) {
@@ -2641,7 +2661,7 @@ export default class AttendanceService {
             } else {
                 // Daily or custom range mode: single date timeline
                 const timelineDate = rowsQuery.date ?? todayDate();
-                
+
                 for (const empId of timelineEmployeeIds) {
                     try {
                         const timeline = await this.getReportEmployeeTimeline(empId, { date: timelineDate, timezone });
@@ -2656,7 +2676,7 @@ export default class AttendanceService {
                             "Name": emp.name ?? "",
                             "Department": emp.department ?? "",
                             "Entry Time": formatTime(parentRow.entryTime) ?? "",
-                            "Exit Time": parentRow.exitTime ? formatTime(parentRow.exitTime)  : "--",
+                            "Exit Time": parentRow.exitTime ? formatTime(parentRow.exitTime) : "--",
                             "Last Seen At": formatTime(parentRow.lastSeenAt) ?? "",
                             "Work Hours": parentRow.workHours ?? "",
                             "Status": parentRow.status ?? "",
