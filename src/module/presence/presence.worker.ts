@@ -5,7 +5,6 @@ import { attendanceService } from "../attendance";
 import { redisConfig } from "../../db/connectRedis";
 import { presenceLogService } from "./presence.module";
 import { logger, miliSecondsToISoDate } from "../../utils";
-import { exit } from "process";
 
 const connection = new IORedis(redisConfig);
 
