@@ -3,7 +3,7 @@ import PresenceLogService from "./logs/presence-log.service";
 import { PresenceState, GateRole, RuntimePresence, PresenceDTO } from "./presence.types";
 import { attendanceService } from "../attendance";
 import { envConfig } from "../../config";
-import { miliSecondsToISoDate } from "../../utils";
+import { logger, miliSecondsToISoDate } from "../../utils";
 import { unknownService } from "../unknown/unknown.module";
 import { CreateUnknownPersonEventDTO } from "../unknown/unknown.types";
 import presenceQueue from "./presence.queue";
@@ -187,58 +187,62 @@ export default class PresenceService {
 
 
     async onPersonExited(params: { employeeId: string; cameraCode: string; gateRole: GateRole; eventTs: number; confidence: number; }) {
-        const { employeeId, cameraCode, gateRole, eventTs, confidence } = params;
-
-        const presence = await PresenceModel.findOne({ employeeId });
-
-        if (!presence || presence.state === "OUT") {
-            console.log("[EXIT IGNORED] due to already out", employeeId);
-            return
-        };
-
-        if (this.isExitPendingState(presence.state)) {
-            console.log("[EXIT DUPLICATE IGNORED]", employeeId);
-            return;
+        try {
+            const { employeeId, cameraCode, gateRole, eventTs, confidence } = params;
+    
+            const presence = await PresenceModel.findOne({ employeeId });
+    
+            if (!presence || presence.state === "OUT") {
+                console.log("[EXIT IGNORED] due to already out", employeeId);
+                return
+            };
+    
+            if (this.isExitPendingState(presence.state)) {
+                console.log("[EXIT DUPLICATE IGNORED]", employeeId);
+                return;
+            }
+    
+            await PresenceModel.updateOne(
+                { employeeId },
+                {
+                    $set: {
+                        state: "EXIT_PENDING",
+                        pendingExitAt: eventTs,
+                        lastSeenAt: eventTs,
+                        lastChangedAt: eventTs,
+                        lastGate: "EXIT",
+                        lastCameraCode: cameraCode,
+                        confidence,
+                    },
+                }
+            );
+    
+            await presenceLogService.insertLog({
+                employeeId,
+                eventType: "EXIT_DETECTED",
+                fromState: presence.state as PresenceState,
+                toState: "EXIT_PENDING",
+                cameraCode,
+                occurredAt: eventTs,
+                date: miliSecondsToISoDate(eventTs),
+                source: "face_recognition",
+                confidence,
+            });
+    
+            await presenceQueue.add("confirm-exit", { employeeId, exitTs: eventTs },
+                {
+                    delay: envConfig.exitTimeoutAfterExitGate,
+                    jobId: `exit-${employeeId}-${eventTs}`,
+                    removeOnComplete: true,
+                    removeOnFail: false,
+                }
+            );
+            
+    
+            console.log("[EXIT PENDING]", employeeId);
+        } catch (error) {
+            logger.error(`Error occurred while processing exit event for person ${params.employeeId}: ${error}`);
         }
-
-        await PresenceModel.updateOne(
-            { employeeId },
-            {
-                $set: {
-                    state: "EXIT_PENDING",
-                    pendingExitAt: eventTs,
-                    lastSeenAt: eventTs,
-                    lastChangedAt: eventTs,
-                    lastGate: "EXIT",
-                    lastCameraCode: cameraCode,
-                    confidence,
-                },
-            }
-        );
-
-        await presenceLogService.insertLog({
-            employeeId,
-            eventType: "EXIT_DETECTED",
-            fromState: presence.state as PresenceState,
-            toState: "EXIT_PENDING",
-            cameraCode,
-            occurredAt: eventTs,
-            date: miliSecondsToISoDate(eventTs),
-            source: "face_recognition",
-            confidence,
-        });
-
-        await presenceQueue.add("confirm-exit", { employeeId, exitTs: eventTs },
-            {
-                delay: envConfig.exitTimeoutAfterExitGate,
-                jobId: `exit-${employeeId}-${eventTs}`,
-                removeOnComplete: true,
-                removeOnFail: false,
-            }
-        );
-        
-
-        console.log("[EXIT PENDING]", employeeId);
     }
 
     async onUnknownEntered(params: CreateUnknownPersonEventDTO) {
