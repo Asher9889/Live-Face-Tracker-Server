@@ -8,6 +8,7 @@ import { unknownService } from "../unknown/unknown.module";
 import { CreateUnknownPersonEventDTO } from "../unknown/unknown.types";
 import presenceQueue from "./presence.queue";
 import mongoose from "mongoose";
+import { presenceLogService } from "./presence.module";
 
 
 
@@ -214,6 +215,18 @@ export default class PresenceService {
                 },
             }
         );
+
+        await presenceLogService.insertLog({
+            employeeId,
+            eventType: "EXIT_DETECTED",
+            fromState: presence.state as PresenceState,
+            toState: "EXIT_PENDING",
+            cameraCode,
+            occurredAt: eventTs,
+            date: miliSecondsToISoDate(eventTs),
+            source: "face_recognition",
+            confidence,
+        });
 
         await presenceQueue.add("confirm-exit", { employeeId, exitTs: eventTs },
             {

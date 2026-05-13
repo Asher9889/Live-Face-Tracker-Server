@@ -9,7 +9,7 @@ export interface IPresenceLog extends Document {
   eventType: PresenceLogType;
 
   fromState?: "IN" | "OUT" | "EXIT_PENDING" | "PENDING_EXIT";
-  toState?: "IN" | "OUT";
+  toState?: "IN" | "OUT" | "EXIT_PENDING" | "PENDING_EXIT";
 
   cameraCode?: string;
 
@@ -34,7 +34,7 @@ const PresenceLogSchema = new Schema<IPresenceLog>(
     },
 
     fromState: { type: String, enum: ["IN", "OUT", "EXIT_PENDING", "PENDING_EXIT"] },
-    toState: { type: String, enum: ["IN", "OUT"] },
+    toState: { type: String, enum: ["IN", "OUT", "EXIT_PENDING", "PENDING_EXIT"] },
 
     cameraCode: { type: String },
 
