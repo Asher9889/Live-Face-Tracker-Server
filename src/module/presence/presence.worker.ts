@@ -4,11 +4,12 @@ import PresenceModel from "./presence.model";
 import { attendanceService } from "../attendance";
 import { redisConfig } from "../../db/connectRedis";
 import { presenceLogService } from "./presence.module";
-import { miliSecondsToISoDate } from "../../utils";
+import { logger, miliSecondsToISoDate } from "../../utils";
 
 const connection = new IORedis(redisConfig);
 
 const presenceWorker = new Worker("presence", async (job) => {
+    logger.info(`Received job: ${job.name}, Data: ${JSON.stringify(job.data)}`);
     if (job.name !== "confirm-exit") return;
 
     const { employeeId, exitTs } = job.data;
@@ -16,7 +17,7 @@ const presenceWorker = new Worker("presence", async (job) => {
     const presence = await PresenceModel.findOne({ employeeId, state: { $in: ["EXIT_PENDING", "PENDING_EXIT"] }, pendingExitAt: exitTs, }).lean();
 
     if (!presence) {
-        console.log("[CONFIRM EXIT] No presence record found for employee", employeeId);
+        logger.info(`[CONFIRM EXIT] No presence record found for employee: ${employeeId}`);
         return;
     };
 
@@ -59,5 +60,21 @@ const presenceWorker = new Worker("presence", async (job) => {
 },
     { connection }
 );
+
+presenceWorker.on("failed", (job, error) => {
+    logger.error({ jobId: job?.id, jobName: job?.name, error }, "Presence worker job failed");
+});
+
+presenceWorker.on("error", (error) => {
+    logger.error({ error }, "Presence worker error");
+});
+
+void presenceWorker.waitUntilReady()
+    .then(() => {
+        logger.info("Presence worker is ready and connected to Redis");
+    })
+    .catch((error) => {
+        logger.error({ error }, "Presence worker failed to become ready");
+    });
 
 export default presenceWorker;
