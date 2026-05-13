@@ -5,64 +5,90 @@ import { attendanceService } from "../attendance";
 import { redisConfig } from "../../db/connectRedis";
 import { presenceLogService } from "./presence.module";
 import { logger, miliSecondsToISoDate } from "../../utils";
+import { exit } from "process";
 
 const connection = new IORedis(redisConfig);
 
 const presenceWorker = new Worker("presence", async (job) => {
-    logger.info(`Received job: ${job.name}, Data: ${JSON.stringify(job.data)}`);
-    if (job.name !== "confirm-exit") return;
+    try {
+        logger.info(`Received job: ${job.name}, Data: ${JSON.stringify(job.data)}`);
+        if (job.name !== "confirm-exit") return;
 
-    const { employeeId, exitTs } = job.data;
+        let { employeeId, exitTs } = job.data;
 
-    const presence = await PresenceModel.findOne({ employeeId, state: { $in: ["EXIT_PENDING", "PENDING_EXIT"] }, pendingExitAt: exitTs, }).lean();
+        exitTs = Number(exitTs);
 
-    if (!presence) {
-        logger.info(`[CONFIRM EXIT] No presence record found for employee: ${employeeId}`);
-        return;
-    };
+        const presence = await PresenceModel.findOne({ employeeId, state: { $in: ["EXIT_PENDING", "PENDING_EXIT"] }, pendingExitAt: exitTs, }).lean();
 
-    await PresenceModel.updateOne(
-        { employeeId, state: { $in: ["EXIT_PENDING", "PENDING_EXIT"], pendingExitAt: exitTs, } },
-        {
-            $set: {
-                state: "OUT",
-                lastSeenAt: exitTs,
-                lastChangedAt: exitTs,
-                lastGate: "EXIT",
-                lastCameraCode: presence.lastCameraCode,
-                confidence: presence.confidence,
-                pendingExitAt: null,
+        if (!presence) {
+            logger.info(`[CONFIRM EXIT] No presence record found for employee: ${employeeId}`);
+            return;
+        };
+
+        await PresenceModel.updateOne(
+            { employeeId, state: { $in: ["EXIT_PENDING", "PENDING_EXIT"] }, pendingExitAt: exitTs },
+            {
+                $set: {
+                    state: "OUT",
+                    lastSeenAt: exitTs,
+                    lastChangedAt: exitTs,
+                    lastGate: "EXIT",
+                    lastCameraCode: presence.lastCameraCode,
+                    confidence: presence.confidence,
+                    pendingExitAt: null,
+                },
+            }
+        );
+
+        await attendanceService.endSession({
+            employeeId,
+            exitAt: exitTs,
+            exitSource: "EXIT_CAMERA",
+            exitCameraCode: presence.lastCameraCode,
+            exitConfidence: presence.confidence,
+        });
+
+        await presenceLogService.insertLog({
+            employeeId,
+            eventType: "EXIT_CONFIRMED",
+            fromState: "EXIT_PENDING",
+            toState: "OUT",
+            cameraCode: presence.lastCameraCode,
+            occurredAt: exitTs,
+            date: miliSecondsToISoDate(exitTs),
+            source: "face_recognition",
+            confidence: presence.confidence,
+        });
+
+        console.log("[OUT]", employeeId);
+    } catch (error) {
+
+        logger.error(
+            {
+                errorMessage:
+                    error instanceof Error
+                        ? error.message
+                        : String(error),
+
+                errorStack:
+                    error instanceof Error
+                        ? error.stack
+                        : undefined,
             },
-        }
-    );
 
-    await attendanceService.endSession({
-        employeeId,
-        exitAt: exitTs,
-        exitSource: "EXIT_CAMERA",
-        exitCameraCode: presence.lastCameraCode,
-        exitConfidence: presence.confidence,
-    });
-
-    await presenceLogService.insertLog({
-        employeeId,
-        eventType: "EXIT_CONFIRMED",
-        fromState: "EXIT_PENDING",
-        toState: "OUT",
-        cameraCode: presence.lastCameraCode,
-        occurredAt: exitTs,
-        date: miliSecondsToISoDate(exitTs),
-        source: "face_recognition",
-        confidence: presence.confidence,
-    });
-
-    console.log("[OUT]", employeeId);
+            "Error processing presence worker job"
+        );
+        throw error;
+    }
 },
     { connection }
 );
 
 presenceWorker.on("failed", (job, error) => {
-    logger.error({ jobId: job?.id, jobName: job?.name, error }, "Presence worker job failed");
+    logger.error({
+        jobId: job?.id, jobName: job?.name, errorMessage: error.message,
+        errorStack: error.stack
+    }, "Presence worker job failed");
 });
 
 presenceWorker.on("error", (error) => {

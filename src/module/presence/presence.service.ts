@@ -223,6 +223,7 @@ export default class PresenceService {
                 removeOnFail: false,
             }
         );
+        
 
         console.log("[EXIT PENDING]", employeeId);
     }
