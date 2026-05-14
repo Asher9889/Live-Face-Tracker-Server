@@ -17,7 +17,7 @@ const presenceWorker = new Worker("presence", async (job) => {
 
         exitTs = Number(exitTs) + 1000; // for correct log order
 
-        const presence = await PresenceModel.findOne({ employeeId, state: { $in: ["EXIT_PENDING", "PENDING_EXIT"] }, pendingExitAt: exitTs, }).lean();
+        const presence = await PresenceModel.findOne({ employeeId, state: { $in: ["EXIT_PENDING", "PENDING_EXIT"] }}).lean();
 
         if (!presence) {
             logger.info(`[CONFIRM EXIT] No presence record found for employee: ${employeeId}`);
