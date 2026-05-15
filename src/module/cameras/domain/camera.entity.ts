@@ -43,6 +43,7 @@ export default class Camera {
   constructor(props: ICameraProps) {
     this.props = {
       ...props,
+      id: props.id,
       role: props.role,
       gateType: props.gateType,
       credentials: props.credentials ?? { username: null, password: null },

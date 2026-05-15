@@ -6,15 +6,25 @@ import { CameraStatusDTO } from "../application/dtos/CreateCameraDTO";
 import Camera from "../domain/camera.entity";
 import CameraModel from "./camera.model";
 import ICameraRepository from "./ICamera.repository";
+import { TGateType } from "../domain/camera.constant";
+
 
 export default class CameraRepository implements ICameraRepository {
     async save(camera: Camera): Promise<Camera> {
         const doc = await CameraModel.create(camera.toJSON());
         return doc;
     }
-    async findByCode(code: string): Promise<Camera | null> {
-        const doc = await CameraModel.findOne({ code }, { _id: 1 }).lean();
-        return doc;
+    async findByCode(code: string): Promise<{ id: string; name: string; gateType: TGateType }  | null> {
+        const doc = await CameraModel.findOne({ code }, { _id: 1, name: 1,  gateType: 1 }).lean();
+        if(!doc) {
+            throw new ApiError(StatusCodes.NOT_FOUND, "Camera not found");
+        }
+        const camera = {
+            id: doc._id.toString(),
+            name: doc.name,
+            gateType: doc.gateType,
+        };
+        return camera;
     }
     async getAll(){
         const docs = await CameraModel.find().lean();

@@ -36,4 +36,8 @@ export default class CameraService {
         }
         return await this.repo.update(cameraId, allowed as any);
     }
+
+    getCameraByCode(code: string){
+        return this.repo.findByCode(code);
+    }
 }

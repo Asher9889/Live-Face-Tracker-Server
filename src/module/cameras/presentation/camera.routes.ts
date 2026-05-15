@@ -11,7 +11,8 @@ import { StatusCodes } from "http-status-codes";
 
 const router = express.Router();
 
-const controller = new CameraController(new CameraService(new CameraRepository));
+const cameraService = new CameraService(new CameraRepository);
+const controller = new CameraController(cameraService);
 
 router.post("/", isAuthenticated, validate(cameraSchema), controller.createCamera);
 router.put("/:cameraId", isAuthenticated, validate(cameraUpdateSchema), controller.updateCamera);
@@ -53,3 +54,5 @@ router.post("/:cameraId/stop", async (req, res) => {
 router.get("/status", controller.getAllCamerasStatus);
 
 export default router;
+
+export { cameraService}
