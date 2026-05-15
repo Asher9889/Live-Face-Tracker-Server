@@ -25,7 +25,7 @@ const presenceWorker = new Worker("presence", async (job) => {
         }; 
 
         await PresenceModel.updateOne(
-            { employeeId, state: { $in: ["EXIT_PENDING", "PENDING_EXIT"] }, pendingExitAt: exitTs },
+            { employeeId, state: { $in: ["EXIT_PENDING", "PENDING_EXIT"] }},
             {
                 $set: {
                     state: "OUT",
