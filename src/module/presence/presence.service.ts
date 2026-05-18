@@ -248,4 +248,8 @@ export default class PresenceService {
     async onUnknownEntered(params: CreateUnknownPersonEventDTO) {
         await unknownService.createUnknownPersonEvent(params);
     }
+
+    
+
+
 }

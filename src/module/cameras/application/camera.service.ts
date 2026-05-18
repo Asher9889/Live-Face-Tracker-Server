@@ -37,7 +37,7 @@ export default class CameraService {
         return await this.repo.update(cameraId, allowed as any);
     }
 
-    getCameraByCode(code: string){
-        return this.repo.findByCode(code);
+    async getCameraByCode(code: string){
+        return await this.repo.findByCode(code);
     }
 }

@@ -3,12 +3,16 @@ import { WS_EVENTS } from "../events";
 import { cameraService } from "../module/cameras";
 import { TCameraRole, TGateType } from "../module/cameras/domain/camera.constant";
 import { TDepartment, TRole } from "../module/employees/domain/employee.constants";
+import { onPersonEntered } from "../module/presence/presence-ui-event.resolver";
 import { employeeService } from "../module/shared/minio/minio.client";
+import { UnknownIdentityModel } from "../module/unknown/unknown-identity.model";
+import envConfig from "../config/env.config";
 // import { presenceService } from "../module/presence/presence.module";
 import { wsServer } from "./initStream";
 import normalizeBBox from "./normalizeBBox";
+import { logger } from "../utils";
 
-type FaceBBoxPayload = {
+export type FaceBBoxPayload = {
     event: "track_update" | "track_lost" | "person_update" | "person_entered" | "person_exited" | "unknown_entered" | "unknown_exited";
     camera_code: string;
     track_id: number;
@@ -69,11 +73,13 @@ export default function initCameraBBoxSubscriber() {
             console.log("[Event] person_entered event happened for person", payload.person_id);
         }
 
-        const cameraData = cameraMap.get(camera_code);
+        let cameraData = cameraMap.get(camera_code);
+        // If camera data is not in the map, fetch from database and cache it
         if (!cameraData) {
             const camera = await cameraService.getCameraByCode(camera_code);
             if (camera) {
                 cameraMap.set(camera_code, { cameraCode: camera_code, cameraName: camera.name, gateType: camera.gateType });
+                cameraData = cameraMap.get(camera_code);
             } else {
                 console.warn(`Camera with code ${camera_code} not found in database`);
             }
@@ -83,47 +89,134 @@ export default function initCameraBBoxSubscriber() {
 
 
 
+        // Build event-specific UI payloads
+        let uiEventPayload: any = null;
 
-        if (knownNotificationEvents.has(payload.event)) {
-            console.log(`[Notification] ${payload.event} event for person_id ${payload.person_id} at camera ${cameraCode}`);
-            if (!payload.person_id) {
-                return;
-            }
+        switch (payload.event) {
+            case "person_entered":
+                console.log(`[Event] person_entered for person`, payload.person_id);
+                if (payload.person_id) {
+                    // prefer resolver which enriches with cameraName, gateRole, note
+                    uiEventPayload = await onPersonEntered(payload.event, payload);
 
-            const notificationPayload = notificationEmployeeMap.get(payload.person_id)
-            if (!notificationPayload) {
-                const data = await employeeService.getEmployeeNotificationData(payload.person_id);
-                notificationEmployeeMap.set(data.id, data);
-            }
+                    // fallback: simple employee fetch
+                    if (!uiEventPayload) {
+                        try {
+                            const data = await employeeService.getEmployeeNotificationData(payload.person_id);
+                            uiEventPayload = {
+                                ...data,
+                                cameraCode: camera_code,
+                                cameraName,
+                                eventTs: payload.eventTs,
+                                note: `${data.name} was detected entering at ${cameraName}`,
+                                noteKey: "person_entered",
+                            };
+                        } catch (e) {
+                            console.warn(`[UI] failed to fetch employee data for ${payload.person_id}`, e);
+                        }
+                    } else {
+                        uiEventPayload.noteKey = "person_entered";
+                    }
+                }
+                break;
 
+            case "person_exited":
+                console.log(`[Event] person_exited for person`, payload.person_id);
+                if (payload.person_id) {
+                    try {
+                        const data = await employeeService.getEmployeeNotificationData(payload.person_id);
+                        uiEventPayload = {
+                            ...data,
+                            cameraCode: camera_code,
+                            cameraName,
+                            eventTs: payload.eventTs,
+                            note: `${data.name} was detected exiting from ${cameraName}`,
+                            noteKey: "person_exited",
+                        };
+                    } catch (e) {
+                        console.warn(`[UI] failed to fetch employee data for ${payload.person_id}`, e);
+                    }
+                }
+                break;
+
+            case "unknown_entered":
+                console.log(`[Event] unknown_entered for track_id`, payload.track_id);
+                // Unknown identities are stored in UnknownIdentityModel; person_id may contain the identity id
+                if (payload.person_id) {
+                    try {
+                        const identity = await UnknownIdentityModel.findById(payload.person_id).lean();
+                        const avatar = identity?.representativeImageKey ? `https://minio.mssplonline.in/${envConfig.minioEmployeeBucketName}/${identity.representativeImageKey}` : null;
+                        uiEventPayload = {
+                            id: payload.person_id,
+                            name: null,
+                            role: "Unknown",
+                            department: null,
+                            avatar,
+                            cameraCode: camera_code,
+                            cameraName,
+                            eventTs: payload.eventTs,
+                            note: `Unknown person detected entering at ${cameraName}`,
+                            noteKey: "unknown_entered",
+                        };
+                    } catch (e) {
+                        console.warn(`[UI] failed to fetch unknown identity ${payload.person_id}`, e);
+                    }
+                }
+                break;
+
+            case "unknown_exited":
+                console.log(`[Event] unknown_exited for track_id`, payload.track_id);
+                if (payload.person_id) {
+                    try {
+                        const identity = await UnknownIdentityModel.findById(payload.person_id).lean();
+                        const avatar = identity?.representativeImageKey ? `https://minio.mssplonline.in/${envConfig.minioEmployeeBucketName}/${identity.representativeImageKey}` : null;
+                        uiEventPayload = {
+                            id: payload.person_id,
+                            name: null,
+                            role: "Unknown",
+                            department: null,
+                            avatar,
+                            cameraCode: camera_code,
+                            cameraName,
+                            eventTs: payload.eventTs,
+                            note: `Unknown person detected exiting from ${cameraName}`,
+                            noteKey: "unknown_exited",
+                        };
+                    } catch (e) {
+                        console.warn(`[UI] failed to fetch unknown identity ${payload.person_id}`, e);
+                    }
+                }
+                break;
+        }
+
+        if (uiEventPayload) {
+            logger.info(`[Notification] ${payload.event} ready; broadcasting UI payload for camera ${cameraCode}`);
             wsServer.broadcast({
                 type: WS_EVENTS.UI_EVENT_NOTIFICATION,
-                payload: {
-                    ...notificationEmployeeMap.get(payload.person_id),
-                    cameraCode,
-                    cameraName
-                }
+                event: payload.event,
+                payload: uiEventPayload,
             });
         }
 
-
-
-        // Broadcast the event to WebSocket clients 
-        // wsServer.broadcast({
+        // Broadcast the face/bbox event to WebSocket clients
+        // const faceEventPayload = {
         //     type: WS_EVENTS.FACE_BBOX,
         //     payload: {
         //         event: payload.event,
         //         cameraCode,
-        //         trackId: payload.track_id,
-        //         personId: payload?.person_id,
-        //         bbox: normalizedBBox ?? {},
-        //         frameTs: payload.frameTs,
-        //         eventTs: payload.eventTs,
-        //         similarity: payload?.similarity,
-        //         frameWidth: payload.frame_width,
-        //         frameHeight: payload.frame_height,
+        //         cameraName,
+        //         trackId: track_id,
+        //         personId: person_id ?? null,
+        //         bbox: normalizedBBox ?? null,
+        //         frameTs: frameTs,
+        //         eventTs: eventTs,
+        //         similarity: payload?.similarity ?? null,
+        //         frameWidth: frame_width,
+        //         frameHeight: frame_height,
         //     }
-        // });
+        // };
+
+        // wsServer.broadcast(faceEventPayload);
 
     });
 }
