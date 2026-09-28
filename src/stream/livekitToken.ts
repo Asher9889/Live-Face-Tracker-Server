@@ -16,13 +16,18 @@ export function createCameraToken(cameraId: string) {
 }
 
 export async function createViewerToken(roomName: string, identity: string) {
-  const at = new AccessToken(envConfig.liveKitApiKey, envConfig.liveKitApiSecret, { identity } );
+  const at = new AccessToken(envConfig.liveKitApiKey, envConfig.liveKitApiSecret, {
+    identity,
+    ttl: envConfig.liveKitTokenTtlSeconds,
+  } );
 
   at.addGrant({
     room: roomName,
     roomJoin: true,
     canPublish: false,
     canSubscribe: true,
+    // Viewers read `frame_state`; they must never be able to send into the room.
+    canPublishData: false,
   });
 
   return at.toJwt();

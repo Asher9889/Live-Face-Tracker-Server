@@ -8,11 +8,14 @@ import dashboardRoutes from "../../module/dashboard";
 import { attendanceRoutes } from "../../module/attendance";
 import { isAuthenticated } from "../../middlewares";
 import { unknownRoutes } from "../../module/unknown";
+import liveRoutes from "../../module/live";
 
 router.use("/auth", authRoutes);
 router.use("/employees", isAuthenticated,  employeesRoutes);
 router.use("/presence", isAuthenticated, presenceRoutes);
 router.use("/cameras", camerasRoutes);
+// LiveKit preview: room list + view-only token per camera
+router.use("/live", isAuthenticated, liveRoutes);
 router.use("/dashboard", isAuthenticated, dashboardRoutes);
 router.use("/attendance", isAuthenticated, attendanceRoutes);
 

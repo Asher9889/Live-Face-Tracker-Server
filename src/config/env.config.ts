@@ -67,6 +67,13 @@ const envConfig: IEnv = {
     liveKitIngressHost: process.env.LIVEKIT_INGRESS_HOST!!,
     liveKitApiSecret: process.env.LIVEKIT_API_SECRET!!,
     liveKitApiKey: process.env.LIVEKIT_API_KEY!!,
+    // Public signalling URL the browser connects to (wss://...), not the
+    // self-hosted ingress host. Falls back to the ingress host so existing
+    // deployments keep working before the var is added.
+    liveKitUrl: process.env.LIVEKIT_URL || process.env.LIVEKIT_INGRESS_HOST!!,
+    // How long a viewer's join token stays valid. Only gates *joining* — an
+    // already-connected session is unaffected — so keep it short.
+    liveKitTokenTtlSeconds: Number(process.env.LIVEKIT_TOKEN_TTL_SECONDS || 3600),
 
     // Camera Status track
     watchdogInterval: Number(process.env.WATCHDOG_INTERVAL!!),

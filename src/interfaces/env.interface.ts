@@ -48,6 +48,8 @@ interface IEnv {
     liveKitIngressHost: string;
     liveKitApiSecret: string;
     liveKitApiKey: string;
+    liveKitUrl: string;
+    liveKitTokenTtlSeconds: number;
 
     // Camera Status track
     watchdogInterval: number;

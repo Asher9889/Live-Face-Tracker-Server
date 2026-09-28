@@ -14,15 +14,18 @@ export default class CameraRepository implements ICameraRepository {
         const doc = await CameraModel.create(camera.toJSON());
         return doc;
     }
-    async findByCode(code: string): Promise<{ id: string; name: string; gateType: TGateType }> {
-        const doc = await CameraModel.findOne({ code }, { _id: 1, name: 1,  gateType: 1 }).lean();
+    async findByCode(code: string): Promise<{ id: string; code: string; name: string; gateType: TGateType; enabled: boolean; online: boolean }> {
+        const doc = await CameraModel.findOne({ code }, { _id: 1, code: 1, name: 1,  gateType: 1, enabled: 1, "status.online": 1 }).lean();
         if(!doc) {
             throw new ApiError(StatusCodes.NOT_FOUND, "Camera not found");
         }
         const camera = {
             id: doc._id.toString(),
+            code: doc.code,
             name: doc.name,
             gateType: doc.gateType,
+            enabled: doc.enabled ?? true,
+            online: doc.status?.online ?? false,
         };
         return camera;
     }
