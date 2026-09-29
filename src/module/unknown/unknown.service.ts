@@ -665,7 +665,7 @@ class UnknownService {
   }
 
   generateMinioUrl(bucketName: string, representativeImageKey: string) {
-    return `https://minio.mssplonline.in/${bucketName}/${representativeImageKey}`;
+    return `https://storage.mssplonline.in/${bucketName}/${representativeImageKey}`;
   }
 
   computeWeightedCentroid(poses: Record<string, { embedding: number[]; quality: number; }>): number[] {
