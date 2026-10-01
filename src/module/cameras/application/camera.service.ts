@@ -3,6 +3,7 @@ import { ApiError } from "../../../utils";
 import Camera from "../domain/camera.entity";
 import CameraRepository from "../infrastructure/camera.repository";
 import { CreateCameraDTO } from "./dtos/CreateCameraDTO";
+import CameraModel from "../infrastructure/camera.model";
 
 export default class CameraService {
     private repo: CameraRepository;
@@ -11,16 +12,19 @@ export default class CameraService {
     }
 
     async createCamera(cameraDTO: CreateCameraDTO){
-        const exists = await this.repo.findByCode(cameraDTO.code);
+        // const exists = await this.repo.findByCode(cameraDTO.code);
+        const exists = await CameraModel.findOne({ code: cameraDTO.code }, { _id: 1 }).lean();
         if(exists){
             throw new ApiError(StatusCodes.BAD_REQUEST, "Camera with code already exists", [{ field: "code", message: "Camera with code already exists" }]);
         }
         const camera = new Camera(cameraDTO);
         return this.repo.save(camera);
     }
+
     async getAllCameras(){
         return await this.repo.getAll();
     }
+    
     async getAllCamerasStatus(){
         return await this.repo.getAllStatus();
     }

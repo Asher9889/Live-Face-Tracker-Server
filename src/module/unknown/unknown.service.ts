@@ -543,6 +543,19 @@ class UnknownService {
     }
   }
 
+  deleteUnknownIdentity = async (unknownId: string): Promise<{ unknownId: string }> => {
+    const identity = await UnknownIdentityModel.findById(unknownId);
+    if (!identity) {
+      throw new ApiError(StatusCodes.NOT_FOUND, "Unknown identity not found");
+    }
+
+    identity.status = "deleted";
+    identity.deletedAt = Date.now();
+    await identity.save();
+
+    return { unknownId };
+  };
+
   // mergeUnknown = async ({ sourceIds }: MergeUnknownDTO) => {
   //   const identities = await UnknownIdentityModel.find({ _id: { $in: sourceIds }}).lean();
   //   const primaryIdentity = identities.reduce((prev, curr) => {

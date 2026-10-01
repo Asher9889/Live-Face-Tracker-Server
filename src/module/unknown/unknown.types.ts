@@ -1,5 +1,5 @@
 import zod from "zod";
-import createUnknownEventSchema,{ createUnknownPersonEventSchema, mergeUnknownSchema, createUnknownSchema, updateUnknownSchema } from "./unknown.schema";
+import createUnknownEventSchema,{ createUnknownPersonEventSchema, mergeUnknownSchema, createUnknownSchema, updateUnknownSchema, deleteUnknownSchema } from "./unknown.schema";
 import { createUnknownIdentityDTO } from "./unknown.schema";
 
 export const AllowedPoses = ["left", "left_mid", "frontal", "right_mid", "right"];
@@ -12,6 +12,7 @@ export type CreateUnknownPersonEventDTO = zod.infer<typeof createUnknownPersonEv
 export type MergeUnknownDTO = zod.infer<typeof mergeUnknownSchema>
 export type CreateUnknownSchemaDTO = zod.infer<typeof createUnknownSchema>;
 export type updateUnknownSchemaDTO = zod.infer<typeof updateUnknownSchema>;
+export type deleteUnknownSchemaDTO = zod.infer<typeof deleteUnknownSchema>;
 
 export type PoseKey = "left" | "left_mid" | "frontal" | "right_mid" | "right";
 export type PoseMap = Partial<Record<PoseKey, PoseData>>;

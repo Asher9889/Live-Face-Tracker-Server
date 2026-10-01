@@ -16,6 +16,17 @@ export const validate = (schema: ZodObject) => (req: Request, res: Response, nex
     next();
 };
 
+export const validateParams = (schema: ZodObject) => (req: Request, res: Response, next: NextFunction) => {
+    const result = schema.safeParse(req.params);
+
+    if (!result.success) {
+        const errors = result.error.issues.map((error) => ({ field: error.path[0], message: error.message }))
+        throw new ApiError(StatusCodes.BAD_REQUEST, "Please provide valid data", errors);
+    }
+    req.params = result.data as any;
+    next();
+};
+
 export const validateQuery = <T>(schema: ZodObject) => (req: CustomRequest<T>, res: Response, next: NextFunction) => {
     const result = schema.safeParse(req.query);
 

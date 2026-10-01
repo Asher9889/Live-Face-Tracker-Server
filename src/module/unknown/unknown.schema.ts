@@ -214,5 +214,9 @@ const updateUnknownSchema = zod.object({
         )
 })
 
+const deleteUnknownSchema = zod.object({
+    unknownId: zod.string().min(1),
+})
+
 export default createUnknownEventSchema;
-export { updateUnknownSchema, createUnknownIdentityDTO, createUnknownPersonEventSchema, mergeUnknownSchema, createUnknownSchema };
+export { updateUnknownSchema, createUnknownIdentityDTO, createUnknownPersonEventSchema, mergeUnknownSchema, createUnknownSchema, deleteUnknownSchema };

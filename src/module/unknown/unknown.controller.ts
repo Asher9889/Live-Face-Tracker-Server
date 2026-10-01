@@ -1,5 +1,5 @@
 import { NextFunction, Request, Response } from "express";
-import { CreateUnknownEventDTO, CreateUnknownIdentityDTO, CreateUnknownPersonEventDTO, CreateUnknownSchemaDTO, MergeUnknownDTO, updateUnknownSchemaDTO } from "./unknown.types";
+import { CreateUnknownEventDTO, CreateUnknownIdentityDTO, CreateUnknownPersonEventDTO, CreateUnknownSchemaDTO, MergeUnknownDTO, updateUnknownSchemaDTO, deleteUnknownSchemaDTO } from "./unknown.types";
 import { unknownService } from "./unknown.module";
 import { ApiError, ApiResponse, saveUnknownDebugImages } from "../../utils";
 import { StatusCodes } from "http-status-codes";
@@ -426,6 +426,16 @@ class UnknownController {
             return next(error);
         }
     };
+
+    deleteUnknownIdentity = async (req: Request, res: Response, next: NextFunction) => {
+        try {
+            const { unknownId } = req.params as { unknownId: string };
+            const data = await unknownService.deleteUnknownIdentity(unknownId);
+            return ApiResponse.success(res, "Unknown identity deleted successfully", data);
+        } catch (error) {
+            return next(error);
+        }
+    }
 
 }
 

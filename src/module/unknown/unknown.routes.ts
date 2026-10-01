@@ -2,8 +2,8 @@ import express from "express";
 import uploadFaces, { multerErrorHandler, multerSingleFaceErrorHandler, uploadFace, uploadUnknownFaces, uploadUnknownFacesErrorHandler } from "../employees/middlewares/multer";
 import multerDebugLogger from "./middlewares/multerDebugLogger";
 import { unknownController } from "./unknown.module";
-import { createUnknownIdentityDTO, createUnknownPersonEventSchema, mergeUnknownSchema, createUnknownSchema, updateUnknownSchema } from "./unknown.schema";
-import { validate } from "../../middlewares/validate.middleware";
+import { createUnknownIdentityDTO, createUnknownPersonEventSchema, mergeUnknownSchema, createUnknownSchema, updateUnknownSchema, deleteUnknownSchema } from "./unknown.schema";
+import { validate, validateParams } from "../../middlewares/validate.middleware";
 import { AllowedPoses } from "../employees/domain/employee.constants";
 
 const router = express.Router();
@@ -22,5 +22,8 @@ router.get("/embeddings", unknownController.findAllEmbeddings);
 
 // merge unknown
 router.post("/merge", validate(mergeUnknownSchema), unknownController.mergeUnknown)
+
+// delete unknown
+router.delete("/:unknownId", validateParams(deleteUnknownSchema), unknownController.deleteUnknownIdentity)
 
 export default router;

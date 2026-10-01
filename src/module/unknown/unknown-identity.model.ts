@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 
-export type IdentityStatus = "unknown" | "converted";
+export type IdentityStatus = "unknown" | "converted" | "deleted";
 
 export interface IUnknownIdentity {
   representativeEmbedding: number[];
@@ -27,6 +27,7 @@ export interface IUnknownIdentity {
   cameraCode: string;
 
   mergedInto: mongoose.Types.ObjectId | null;
+  deletedAt: number | null;
 
   createdAt: Date;
   updatedAt: Date;
@@ -136,7 +137,7 @@ const UnknownIdentitySchema = new mongoose.Schema<IUnknownIdentity>(
 
     status: {
       type: String,
-      enum: ["unknown", "converted"],
+      enum: ["unknown", "converted", "deleted"],
       default: "unknown",
       index: true,
     },
@@ -151,6 +152,11 @@ const UnknownIdentitySchema = new mongoose.Schema<IUnknownIdentity>(
       ref: "UnknownIdentity",
       required: false,
       index: true,
+      default: null,
+    },
+    deletedAt: {
+      type: Number,
+      required: false,
       default: null,
     },
   },
