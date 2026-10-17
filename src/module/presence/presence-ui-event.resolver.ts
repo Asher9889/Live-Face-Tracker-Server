@@ -28,7 +28,13 @@ async function onPersonEntered(event: event, payload: FaceBBoxPayload) {
 
     logger.info(`Received ${event} event for person_id ${person_id} at camera ${camera_code}`);
 
-    const employeeInfo = await employeeService.getEmployeeNotificationData(person_id);
+    let employeeInfo;
+    try {
+        employeeInfo = await employeeService.getEmployeeNotificationData(person_id);
+    } catch (error) {
+        logger.warn(`No employee data found for person_id ${person_id}`,);
+        return;
+    }
 
     if (!employeeInfo) {
         logger.warn(`No employee data found for person_id ${person_id}`);

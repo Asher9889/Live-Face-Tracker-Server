@@ -97,7 +97,11 @@ export default function initCameraBBoxSubscriber() {
                 console.log(`[Event] person_entered for person`, payload.person_id);
                 if (payload.person_id) {
                     // prefer resolver which enriches with cameraName, gateRole, note
-                    uiEventPayload = await onPersonEntered(payload.event, payload);
+                    try {
+                        uiEventPayload = await onPersonEntered(payload.event, payload);
+                    } catch (e) {
+                        console.warn(`[UI] onPersonEntered failed for ${payload.person_id}`);
+                    }
 
                     // fallback: simple employee fetch
                     if (!uiEventPayload) {
