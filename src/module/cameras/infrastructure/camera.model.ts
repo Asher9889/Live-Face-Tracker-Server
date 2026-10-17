@@ -86,6 +86,6 @@ CameraSchema.index({ gateType: 1 });
 CameraSchema.index({ enabled: 1 });
 CameraSchema.index({ "status.online": 1 });
 
-const CameraModel = model<Camera & Document>("Camera", CameraSchema);
+const CameraModel = model<Camera & Document>("Camera", CameraSchema, "cameras_collection");
 
 export default CameraModel;

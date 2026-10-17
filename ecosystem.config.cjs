@@ -28,9 +28,9 @@ module.exports = {
                 REDIS_DB: "0",
 
                 // LiveKit
-                LIVEKIT_INGRESS_HOST: "ws://184.168.126.114:7880",
-                LIVEKIT_API_KEY: "APIeRxMYAsQbTWq",
-                LIVEKIT_API_SECRET: "fmGQuX3ZnNddKj6msJSRxQ9eOkYYWt3q5cfdmIOYmQmB",
+                LIVEKIT_INGRESS_HOST: "ws://200.234.45.166:7880",
+                LIVEKIT_API_KEY: "APID9LayVWCpogp",
+                LIVEKIT_API_SECRET: "JJj2H5wVmyxVdFehfVuiTkBfJ9BRBRG6i3F9oye435WD",
 
                 // Camera Status
                 WATCHDOG_INTERVAL: "3000", //  # in ms
